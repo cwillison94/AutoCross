@@ -7,6 +7,9 @@ DEFAULT_SERVO_BCM_PIN = 26
 DEFAULT_MIN_ANGLE = -20 
 DEFAULT_MAX_ANGLE = 20
 
+DIRECTION_LEFT = 1
+DIRECTION_RIGHT = 2
+
 class Steering():
 	def __init__(self, servo_bcm_pin = DEFAULT_SERVO_BCM_PIN , min_angle = DEFAULT_MIN_ANGLE, max_angle = DEFAULT_MAX_ANGLE):
 		self.servo_bcm_pin = servo_bcm_pin
@@ -23,10 +26,18 @@ class Steering():
 		#(2500 - 500)/180 = 11.111 
 		self.pi.set_servo_pulsewidth(self.servo_bcm_pin, 1500 + angle * 11.1)
 	
+	def setPercentDirection(self, direction, percent):
+		if (direction == DIRECTION_LEFT):
+			self.setAngle((percent/100.) * self.min_angle)
+		else:
+			self.setAngle((percent/100.) * self.max_angle)
 	
-	def cleanup(self):
+	def stop(self):
 		#stop pwm on pin
 		self.pi.set_servo_pulsewidth(self.servo_bcm_pin, 0)
+		
+	def cleanup(self):
+		self.stop()
 		self.pi.stop()
 		
 	

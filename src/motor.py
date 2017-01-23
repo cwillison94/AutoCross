@@ -11,9 +11,6 @@ SPEED_LOW = 1
 SPEED_MID = 2
 SPEED_MAX = 3
 
-
-print "Starting"
-
 #TODO rename to SpeedController and work the hall effect sensor into this module
 class Motor:
 	def __init__(self, motorBCMPin = DEFAULT_MOTOR_BCMM_PIN):

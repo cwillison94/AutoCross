@@ -54,7 +54,7 @@ def drawLanes(lines, img):
         #pts = np.array([[x1, y1 ], [x2 , y2 ] ], np.int32)
         #cv2.polylines(img, [pts], True, (0, 255, 255))
 
-def main():
+def startVision():
     #cap = cv2.VideoCapture(0)
     
     camera = PiCamera()
@@ -65,6 +65,8 @@ def main():
     time.sleep(0.5)
 
     cascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
+    
+    #cv2.startWindowThread()
 
     check_buffer_count = []
 
@@ -103,6 +105,10 @@ def main():
         cv2.imshow("AutoCross Car Control", img)
 
         if(cv2.waitKey(1) & 0xFF == ord('q')):
-            break
+			cv2.destroyAllWindows()
+			#I am really not sure why this works... I need to commit
+			for i in range(4):
+				cv2.waitKey(1)
+			break
 
-if __name__ == __main__: main()
+if __name__ == "__main__": startVision()

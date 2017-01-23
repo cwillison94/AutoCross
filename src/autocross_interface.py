@@ -2,13 +2,15 @@
 import time
 import motor
 import steering
+import car_vision
 
 #[help string, method name, command name, alias]
 commands = [
-	["test-cycle]\t\t-(tc)runs a test cycle on the car. forward + left/right","testCycle","test-cycle",'tc'], 
+	["test-cycle\t\t-(tc)runs a test cycle on the car. forward + left/right","testCycle","test-cycle",'tc'], 
 	["auto\t\t-(a)run the car in fully autonmous mode with everythin ON", "startAuto","auto", "a"], 
 	["drive <motor_percent>\t\t-(d)set the motor to drive at a percent of 0 to 100","drive", "drive", "d"],
 	["direction <1:L 2:R> <percent_of_direction>\t-set steering servo percentage left or right of max", "steerDirection", "direction"],
+	["start-vision\t\t-Used to test vision for now", "runVision", "start-vision"],
 	["stop\t\t-stops everything","stopCar", "stop"],
 	["exit\t\t-stops and exits", "stopProgram", "exit"],
 	["help\t\t-brings up help", "help", "help", "h"]
@@ -107,6 +109,10 @@ def stop():
 	#probable make carMotor a global object to avoid writting to it so much 
 
 	carMotor.stop()
+	
+def runVision():
+	car_vision.startVision()
+	
 	
 def stopProgram():
 	#call stop car
