@@ -4,7 +4,7 @@ import time
 
 #Broadcom gpio pin (board pin 37)
 DEFAULT_SERVO_BCM_PIN = 26
-DEFAULT_MIN_ANGLE = -20 
+DEFAULT_MIN_ANGLE = -20
 DEFAULT_MAX_ANGLE = 20
 
 DIRECTION_LEFT = 1
@@ -22,6 +22,7 @@ class Steering():
 	
 		#clamp angle to allowable on rc car
 		angle = clamp(angle, self.min_angle, self.max_angle)
+
 	
 		#(2500 - 500)/180 = 11.111 
 		self.pi.set_servo_pulsewidth(self.servo_bcm_pin, 1500 + angle * 11.1)
@@ -59,17 +60,20 @@ if __name__ == "__main__":
 	
 	steering = Steering()
 	
+	steering.setPercentDirection(2, 100)
 	
-	try:
-		while True:
-			for i in range(DEFAULT_MIN_ANGLE, DEFAULT_MAX_ANGLE, 1):
-				steering.setAngle(i)
-				time.sleep(0.5)
+	
+	
+	#try:
+		#while True:
+			#for i in range(DEFAULT_MIN_ANGLE, DEFAULT_MAX_ANGLE, 1):
+				#steering.setAngle(i)
+				#time.sleep(0.01)
 				
-			for i in range(DEFAULT_MAX_ANGLE, DEFAULT_MIN_ANGLE, 1):
-				steering.setAngle(i)
-				time.sleep(0.5)
-	except KeyboardInterrupt:
-		steering.cleanup()
+			#for i in range(DEFAULT_MAX_ANGLE, DEFAULT_MIN_ANGLE, 1):
+				#steering.setAngle(i)
+				#time.sleep(0.01)
+	#except KeyboardInterrupt:
+		#steering.cleanup()
 	
 		

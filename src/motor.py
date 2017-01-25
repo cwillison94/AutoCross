@@ -30,7 +30,10 @@ class Motor:
 			setPower(100)
 		
 	def setPower(self, percentPower):
-		self.pi.set_PWM_dutycycle(self.motorBCMPin, int((percentPower/100.) * 255))
+		if (percentPower >= 100):
+			self.pi.write(self.motorBCMPin, 1)
+		else:
+			self.pi.set_PWM_dutycycle(self.motorBCMPin, int((percentPower/100.) * 255))
 		
 	
 	def stop(self):

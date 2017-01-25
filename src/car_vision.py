@@ -8,6 +8,13 @@ from picamera import PiCamera
 
 CONSECUTIVE_BUFFER_SIZE = 15
 CONSECUTIVE_THRESHOLD = 0.50
+DEFAULT_RESOLUTION_WIDTH = 600
+DEFAULT_RESOLUTION_HEIGHT = 600
+
+HOUGH_LINE_RHO = 1
+HOUGH_LINE_THRESHOLD = 75
+HOUGH_LINE_MIN_LENGTH = 50
+HOUGH_LINE_MAX_GAP = 10
 
 def drawBoxes(rects, img):
     for x1, y1, x2, y2 in rects:
@@ -18,17 +25,15 @@ def drawText(img, message):
 
 def detectLines(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    (thresh, img_bw) = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+    (thresh, img_bw) = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
     img_bw = cv2.GaussianBlur(img_bw, (3, 3), 0)
     #gray = cv2.equalizeHist(gray)
 
     # smooth and canny edge detection
     canny = cv2.Canny(img_bw, 50, 200)
-    #canny = cv2.Canny(gray, 50, 200)
 
-    #ret, thresh = cv2.threshold(equ, 250, 255, cv2.THRESH_BINARY)
-
-    lines = cv2.HoughLinesP(canny, 1, np.pi/180, 100, minLineLength = 10, maxLineGap = 10)
+	#minLineLength = 10, maxLineGap = 10)
+    lines = cv2.HoughLinesP(canny, HOUGH_LINE_RHO, np.pi/180, HOUGH_LINE_THRESHOLD, minLineLength = HOUGH_LINE_MIN_LENGTH, maxLineGap = HOUGH_LINE_MAX_GAP)
 
     if (lines is None or len(lines) == 0):
         return [], img
@@ -46,62 +51,85 @@ def detectStopSign(cascade, img):
 
 def detectLanes(lines):
     print lines[:,0]
-    return lines
+    
+    lines = lines[:,0]
+    filteredLines = horizontalFilter(lines, 0.40 * DEFAULT_RESOLUTION_HEIGHT, DEFAULT_RESOLUTION_HEIGHT)
+    
+    return filteredLines
+    
+def horizontalFilter(lines, minValue, maxValue):
+	linesFiltered = []
+	print "LINES",len(lines)
+	for i in range(len(lines)):
+		x1, y1, x2, y2 = lines[i]
+		if between(y1, minValue, maxValue) and between(y2, minValue, maxValue):
+			linesFiltered += [[x1, y1, x2, y2]]
+			
+	return linesFiltered
+		
+	
+def between(value, minValue, maxValue):
+	return value > minValue and value < maxValue	
 
 def drawLanes(lines, img):
-    for x1,y1,x2,y2 in lines[:,0]:
-        cv2.line(img,(x1, y1),(x2, y2), (0, 255, 0), 2) #rem out if u want to used  polykines
-        #pts = np.array([[x1, y1 ], [x2 , y2 ] ], np.int32)
-        #cv2.polylines(img, [pts], True, (0, 255, 255))
+	for i in range(len(lines)):
+		x1 = lines[i][0]
+		y1 = lines[i][1] 
+		x2 = lines[i][2]
+		y2 = lines[i][3]
+		cv2.line(img,(x1, y1),(x2, y2), (0, 255, 0), 2) #rem out if u want to used  polykines
 
-def startVision():
-    #cap = cv2.VideoCapture(0)
-    
+def determineStopSignal(stop_sign_buffer, rects):
+	stop_sign_buffer += [len(rects)]
+
+	if (len(stop_sign_buffer) >= CONSECUTIVE_BUFFER_SIZE):
+		stop_sign_buffer = stop_sign_buffer[1:]
+		#check percentage
+		threshold = float(sum(stop_sign_buffer))/float(len(stop_sign_buffer))
+		print "Running Threshold: " + str(threshold)
+		if (threshold >= CONSECUTIVE_THRESHOLD):
+			return True
+		else:
+			return False
+
+def startVision():    
     camera = PiCamera()
-    camera.resolution = (400,400)
+    camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
     camera.framerate = 32
-    rawCapture = PiRGBArray(camera, size=(400,400))
+    rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
     
+    #let camera start up
     time.sleep(0.5)
 
-    cascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
+    stopSignCascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
     
-    #cv2.startWindowThread()
-
-    check_buffer_count = []
+    stop_sign_buffer_count = [0]
+    
+    frameCount = 0
 
     for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
-        #ret, img = cap.read()
-        
-        #camera.capture(rawCapture, format="bgr")
+
         img = frame.array
         rawCapture.truncate(0)
 
-        rects, img = detectStopSign(cascade, img)
+        rects, img = detectStopSign(stopSignCascade, img)
+        
+        stopSignDetected = determineStopSignal(stop_sign_buffer_count, rects)
+       
         drawBoxes(rects, img)
 
         lines, img = detectLines(img)
+        
+        if stopSignDetected:        	
+			drawText(img, "Status: STOP SIGN DETECTED dist=" + str(stopSignDistance))
 
         #TODO: process lines to detect lanes via length, and location
         if len(lines) != 0:
             lines = detectLanes(lines)
             drawLanes(lines, img)
-
-        check_buffer_count += [len(rects)]
-
-        if (len(check_buffer_count) >= CONSECUTIVE_BUFFER_SIZE):
-            check_buffer_count = check_buffer_count[1:]
-            #check percentage
-            threshold = float(sum(check_buffer_count))/float(len(check_buffer_count))
-            print "Running Threshold: " + str(threshold)
-            if (threshold >= CONSECUTIVE_THRESHOLD):
-                #sign detected
-                drawText(img, "Status: SEND STOP SIGNAL")
-            else:
-                drawText(img, "Status: ")
-
-
-        drawText(img, "Status: ")
+            
+        frameCount += 1
+        drawText(img, "Status: " + str(frameCount))
         cv2.imshow("AutoCross Car Control", img)
 
         if(cv2.waitKey(1) & 0xFF == ord('q')):

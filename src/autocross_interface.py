@@ -9,7 +9,8 @@ commands = [
 	["test-cycle\t\t-(tc)runs a test cycle on the car. forward + left/right","testCycle","test-cycle",'tc'], 
 	["auto\t\t-(a)run the car in fully autonmous mode with everythin ON", "startAuto","auto", "a"], 
 	["drive <motor_percent>\t\t-(d)set the motor to drive at a percent of 0 to 100","drive", "drive", "d"],
-	["direction <1:L 2:R> <percent_of_direction>\t-set steering servo percentage left or right of max", "steerDirection", "direction"],
+	["direction <L or R> <percent_of_direction>\t-set steering servo percentage left or right of max", "steerDirection", "direction"],
+	["angle <(+/-)angle>\t-set steering servo angle negative for left, positive for right", "steerAngle", "angle"],
 	["start-vision\t\t-Used to test vision for now", "runVision", "start-vision"],
 	["stop\t\t-stops everything","stopCar", "stop"],
 	["exit\t\t-stops and exits", "stopProgram", "exit"],
@@ -96,11 +97,18 @@ def drive(motorPercent):
 	carMotor.setPower(motorPercent)
 	
 def steerDirection(direction, percent):
-	direction = int(direction)
+	if (direction == "L" or direction == "l"):
+		direction = 1
+	else:
+		direction = 2
+	#direction = int(direction)
 	percent = int(percent)
 	
 	carSteering.setPercentDirection(direction, percent)
 	
+def steerAngle(angle):
+	angle = int(angle)
+	carSteering.setAngle(angle)
 	
 def startAuto():
 	print "Not yet impleneted"
