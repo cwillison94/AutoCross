@@ -32,6 +32,9 @@ class Steering():
 			self.setAngle((percent/100.) * self.min_angle)
 		else:
 			self.setAngle((percent/100.) * self.max_angle)
+			
+	def reset(self):
+		self.setAngle(0)
 	
 	def stop(self):
 		#stop pwm on pin

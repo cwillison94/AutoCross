@@ -3,10 +3,13 @@
 import numpy as np
 import cv2
 import time
+import math
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 
-CONSECUTIVE_BUFFER_SIZE = 15
+STOP_SIGN_HAAR = "stop_sign_haar.xml"
+
+CONSECUTIVE_BUFFER_SIZE = 5
 CONSECUTIVE_THRESHOLD = 0.50
 DEFAULT_RESOLUTION_WIDTH = 600
 DEFAULT_RESOLUTION_HEIGHT = 600
@@ -15,6 +18,12 @@ HOUGH_LINE_RHO = 1
 HOUGH_LINE_THRESHOLD = 75
 HOUGH_LINE_MIN_LENGTH = 50
 HOUGH_LINE_MAX_GAP = 10
+
+CAMERA_ALPHA = 8.0 * math.pi / 180
+CAMERA_V_0 = 119.865631204
+CAMERA_A_Y = 32.262498472
+
+STOP_SIGN_HEIGHT = 15 #cm
 
 def drawBoxes(rects, img):
     for x1, y1, x2, y2 in rects:
@@ -41,7 +50,7 @@ def detectLines(img):
     return lines, img
 
 def detectStopSign(cascade, img):
-    rects = cascade.detectMultiScale(img, 1.3, 4, cv2.CASCADE_SCALE_IMAGE , (20, 20))
+    rects = cascade.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (20, 20))
 
     if len(rects) == 0:
         return [], img
@@ -83,14 +92,25 @@ def determineStopSignal(stop_sign_buffer, rects):
 	stop_sign_buffer += [len(rects)]
 
 	if (len(stop_sign_buffer) >= CONSECUTIVE_BUFFER_SIZE):
-		stop_sign_buffer = stop_sign_buffer[1:]
+		stop_sign_buffer.pop(0)
+		
 		#check percentage
 		threshold = float(sum(stop_sign_buffer))/float(len(stop_sign_buffer))
-		print "Running Threshold: " + str(threshold)
 		if (threshold >= CONSECUTIVE_THRESHOLD):
-			return True
+			print rects
+			if len(rects) >0:
+				x1, y1, x2, y2 = rects[0]
+				# y position of target point P
+				v = (y2 + y1) / 2 -15
+				dist = STOP_SIGN_HEIGHT / math.tan(CAMERA_ALPHA + math.atan((v - CAMERA_V_0) / CAMERA_A_Y))
+				return True, dist
+			else:
+				return True, 0
 		else:
-			return False
+			return False, -1
+	else: 
+		return False, -1
+	
 
 def startVision():    
     camera = PiCamera()
@@ -101,7 +121,8 @@ def startVision():
     #let camera start up
     time.sleep(0.5)
 
-    stopSignCascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
+    #stopSignCascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
+    stopSignCascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
     
     stop_sign_buffer_count = [0]
     
@@ -114,22 +135,20 @@ def startVision():
 
         rects, img = detectStopSign(stopSignCascade, img)
         
-        stopSignDetected = determineStopSignal(stop_sign_buffer_count, rects)
-       
+        stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+
         drawBoxes(rects, img)
 
         lines, img = detectLines(img)
         
         if stopSignDetected:        	
-			drawText(img, "Status: STOP SIGN DETECTED dist=" + str(stopSignDistance))
-
+			drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
+			
         #TODO: process lines to detect lanes via length, and location
         if len(lines) != 0:
             lines = detectLanes(lines)
             drawLanes(lines, img)
             
-        frameCount += 1
-        drawText(img, "Status: " + str(frameCount))
         cv2.imshow("AutoCross Car Control", img)
 
         if(cv2.waitKey(1) & 0xFF == ord('q')):

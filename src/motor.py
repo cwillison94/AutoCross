@@ -7,6 +7,7 @@ DEFAULT_MOTOR_BCMM_PIN = 27
 DEFAULT_PWM_FREQUENCY = 100
 DEFAULT_SWEEP_TIME = 30
 
+
 SPEED_LOW = 1
 SPEED_MID = 2
 SPEED_MAX = 3
@@ -31,8 +32,10 @@ class Motor:
 		
 	def setPower(self, percentPower):
 		if (percentPower >= 100):
+			print "full power"
 			self.pi.write(self.motorBCMPin, 1)
 		else:
+			self.pi.write(self.motorBCMPin, 0)
 			self.pi.set_PWM_dutycycle(self.motorBCMPin, int((percentPower/100.) * 255))
 		
 	
