@@ -6,22 +6,36 @@ import time
 import math
 from picamera.array import PiRGBArray
 from picamera import PiCamera
+import line_helper
+import argparse
+
+
+p = argparse.ArgumentParser()
+p.add_argument("-hl", "--headless", help="Run in headless mode", action="store_true")
+
+args = p.parse_args()
+HEADLESS = args.headless
+
+print "HEADLESS = ", HEADLESS
 
 STOP_SIGN_HAAR = "stop_sign_haar.xml"
 
 CONSECUTIVE_BUFFER_SIZE = 5
 CONSECUTIVE_THRESHOLD = 0.50
-DEFAULT_RESOLUTION_WIDTH = 600
-DEFAULT_RESOLUTION_HEIGHT = 600
+DEFAULT_RESOLUTION_WIDTH = 608
+DEFAULT_RESOLUTION_HEIGHT = 608
 
 HOUGH_LINE_RHO = 1
 HOUGH_LINE_THRESHOLD = 75
-HOUGH_LINE_MIN_LENGTH = 50
+HOUGH_LINE_MIN_LENGTH = 40
 HOUGH_LINE_MAX_GAP = 10
 
 CAMERA_ALPHA = 8.0 * math.pi / 180
 CAMERA_V_0 = 119.865631204
 CAMERA_A_Y = 32.262498472
+
+LANE_ROI = DEFAULT_RESOLUTION_HEIGHT - 0.40 * DEFAULT_RESOLUTION_HEIGHT
+
 
 STOP_SIGN_HEIGHT = 15 #cm
 
@@ -41,7 +55,7 @@ def detectLines(img):
     # smooth and canny edge detection
     canny = cv2.Canny(img_bw, 50, 200)
 
-	#minLineLength = 10, maxLineGap = 10)
+    #minLineLength = 10, maxLineGap = 10)
     lines = cv2.HoughLinesP(canny, HOUGH_LINE_RHO, np.pi/180, HOUGH_LINE_THRESHOLD, minLineLength = HOUGH_LINE_MIN_LENGTH, maxLineGap = HOUGH_LINE_MAX_GAP)
 
     if (lines is None or len(lines) == 0):
@@ -59,74 +73,103 @@ def detectStopSign(cascade, img):
     return rects, img
 
 def detectLanes(lines):
-    print lines[:,0]
-    
-    lines = lines[:,0]
-    filteredLines = horizontalFilter(lines, 0.40 * DEFAULT_RESOLUTION_HEIGHT, DEFAULT_RESOLUTION_HEIGHT)
-    
-    return filteredLines
-    
+    filtered_lines = horizontalFilter(lines[:,0], LANE_ROI, DEFAULT_RESOLUTION_HEIGHT)
+
+    lines_left, lines_right = line_helper.split_lines(filtered_lines, DEFAULT_RESOLUTION_WIDTH/2.)
+
+    print "left ", lines_left
+    print "right ", lines_right
+
+    inner_left_m, inner_left_b = find_inner_line(lines_left)
+    inner_right_m, inner_right_b = find_inner_line(lines_right)
+
+    print "inner left ", inner_left_m, inner_left_b
+    print "inner right ", inner_right_m, inner_right_b
+
+
+
+    return [
+        [DEFAULT_RESOLUTION_WIDTH, int(inner_left_m * DEFAULT_RESOLUTION_WIDTH + inner_left_b), 0, int(inner_left_m * 0 + inner_left_b)],
+        [DEFAULT_RESOLUTION_WIDTH, int(inner_right_m * DEFAULT_RESOLUTION_WIDTH + inner_right_b), 0, int(inner_right_m * 0 + inner_right_b)]
+    ]
+    #return filteredLines
+
+def find_inner_line(lines):
+    if len(lines) > 0:
+        x1, y1, x2, y2 = lines[0]
+        current_right_most_line_m, current_right_most_line_b = line_helper.line([x1, y1], [x2, y2])
+        #consider changing to check point at x = 0 instead
+        for i in range(len(lines)):
+            x1, y1, x2, y2 = lines[i]
+            m, b = line_helper.line([x1, y1], [x2, y2])
+            if b <= current_right_most_line_b:
+                #better choice
+                current_right_most_line_m = m
+                current_right_most_line_b = b
+        return current_right_most_line_m, current_right_most_line_b
+    else:
+        return 0, 0
+
+
 def horizontalFilter(lines, minValue, maxValue):
-	linesFiltered = []
-	print "LINES",len(lines)
-	for i in range(len(lines)):
-		x1, y1, x2, y2 = lines[i]
-		if between(y1, minValue, maxValue) and between(y2, minValue, maxValue):
-			linesFiltered += [[x1, y1, x2, y2]]
-			
-	return linesFiltered
-		
-	
+    linesFiltered = []
+    for i in range(len(lines)):
+        x1, y1, x2, y2 = lines[i]
+        if between(y1, minValue, maxValue) and between(y2, minValue, maxValue):
+            linesFiltered += [[x1, y1, x2, y2]]
+
+    return linesFiltered
+
+
 def between(value, minValue, maxValue):
-	return value > minValue and value < maxValue	
+    return value > minValue and value < maxValue
 
 def drawLanes(lines, img):
-	for i in range(len(lines)):
-		x1 = lines[i][0]
-		y1 = lines[i][1] 
-		x2 = lines[i][2]
-		y2 = lines[i][3]
-		cv2.line(img,(x1, y1),(x2, y2), (0, 255, 0), 2) #rem out if u want to used  polykines
+    for i in range(len(lines)):
+        x1, y1, x2, y2 = lines[i]
+        cv2.line(img,(x1, y1),(x2, y2), (0, 255, 0), 2) #rem out if u want to used  polykines
 
 def determineStopSignal(stop_sign_buffer, rects):
-	stop_sign_buffer += [len(rects)]
+    stop_sign_buffer += [len(rects)]
 
-	if (len(stop_sign_buffer) >= CONSECUTIVE_BUFFER_SIZE):
-		stop_sign_buffer.pop(0)
-		
-		#check percentage
-		threshold = float(sum(stop_sign_buffer))/float(len(stop_sign_buffer))
-		if (threshold >= CONSECUTIVE_THRESHOLD):
-			print rects
-			if len(rects) >0:
-				x1, y1, x2, y2 = rects[0]
-				# y position of target point P
-				v = (y2 + y1) / 2 -15
-				dist = STOP_SIGN_HEIGHT / math.tan(CAMERA_ALPHA + math.atan((v - CAMERA_V_0) / CAMERA_A_Y))
-				return True, dist
-			else:
-				return True, 0
-		else:
-			return False, -1
-	else: 
-		return False, -1
-	
+    if (len(stop_sign_buffer) >= CONSECUTIVE_BUFFER_SIZE):
+        stop_sign_buffer.pop(0)
 
-def startVision():    
+        #check percentage
+        threshold = float(sum(stop_sign_buffer))/float(len(stop_sign_buffer))
+        if (threshold >= CONSECUTIVE_THRESHOLD):
+            if len(rects) >0:
+                x1, y1, x2, y2 = rects[0]
+                # y position of target point P
+                v = (y2 + y1) / 2 -15
+                dist = STOP_SIGN_HEIGHT / math.tan(CAMERA_ALPHA + math.atan((v - CAMERA_V_0) / CAMERA_A_Y))
+                return True, dist
+            else:
+                return True, 0
+        else:
+            return False, -1
+    else:
+        return False, -1
+
+def startVision():
     camera = PiCamera()
     camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
     camera.framerate = 32
     rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
-    
+
     #let camera start up
     time.sleep(0.5)
 
-    #stopSignCascade = cv2.CascadeClassifier("frontal_stop_sign_cascade.xml")
+    #cv2.startWindowThread()
+    #cv2.namedWindow("auto-live")
+
+
     stopSignCascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
-    
+
+
     stop_sign_buffer_count = [0]
-    
-    frameCount = 0
+
+
 
     for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
@@ -134,28 +177,34 @@ def startVision():
         rawCapture.truncate(0)
 
         rects, img = detectStopSign(stopSignCascade, img)
-        
+
         stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
 
         drawBoxes(rects, img)
 
         lines, img = detectLines(img)
-        
-        if stopSignDetected:        	
-			drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
-			
+
+        if stopSignDetected:
+            print "STOP SIGN DETECTED"
+            if not(HEADLESS):
+                drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
+
         #TODO: process lines to detect lanes via length, and location
         if len(lines) != 0:
-            lines = detectLanes(lines)
-            drawLanes(lines, img)
-            
-        cv2.imshow("AutoCross Car Control", img)
+            if not(HEADLESS):
+                lines = detectLanes(lines)
+                drawLanes(lines, img)
 
-        if(cv2.waitKey(1) & 0xFF == ord('q')):
-			cv2.destroyAllWindows()
-			#I am really not sure why this works... I need to commit
-			for i in range(4):
-				cv2.waitKey(1)
-			break
+        if not(HEADLESS):
+            cv2.imshow("auto-live", img)
+
+
+
+        if(cv2.waitKey(10) & 0xFF == ord('q')):
+            cv2.destroyAllWindows()
+            #I am really not sure why this works... I need to commit
+            for i in range(4):
+                cv2.waitKey(1)
+            break
 
 if __name__ == "__main__": startVision()
