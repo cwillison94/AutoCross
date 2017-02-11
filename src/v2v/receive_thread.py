@@ -2,6 +2,7 @@ import time
 from threading import Thread
 from nrf24_transceiver import Transceiver
 
+#callback when a message is received
 class ReceiveThread(Thread):
 
 	def __init__(self, callback):

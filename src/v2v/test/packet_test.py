@@ -1,8 +1,8 @@
 import sys
 sys.path.insert(0, "../")
-print sys.path
+from receive_thread import *
+from transmit_thread import *
 
-from transceiver import Transceiver
 
 import time
 import os,binascii 
@@ -11,8 +11,16 @@ import numpy as np, scipy.stats as st
 packet_data = {}
 total_invalid_packets = 0
 
+device_id = binascii.b2a_hex(os.urandom(3))
+
+n = 100000
+transmit_message = str(str(device_id) + ":" + str(n))
+
+
+
+
 def _validate_message(message):
-	return isinstance(message, list) and len(message) == 10 and chr(message[6]) == ':'
+	return isinstance(message, list) and len(message) == 13 and chr(message[6]) == ':'
 
 def _decode_message(raw_message):
 	string = ''.join(chr(e) for e in msg)
@@ -117,14 +125,29 @@ def _report():
 		print('------------------------------------------\n')
 
 
+def on_message_received(msg):
+	arrive_time = time.time()
+	_record_packet(msg, arrive_time)
+
+
+def on_message_sent(transmit_thread):
+	global device_id
+
+	n = int(transmit_thread.get_message()[7:])
+	n +=1
+	new_msg = str(str(device_id) + ":" + str(n))
+	transmit_thread.set_message(new_msg)
+
+
+
 if __name__ == "__main__":
+
+	global transmit_message, n
 
 	print('')
 
-	transceiver = Transceiver()
-	device_id = binascii.b2a_hex(os.urandom(3))
-
-	n = 100 # message id, 3 digits. for estimating packet loss
+	receiver = ReceiveThread(on_message_received)
+	transmitter = TransmitThread(transmit_message)
 
 	time.sleep(1)
 	print('Device ID: '+ device_id)
@@ -134,22 +157,15 @@ if __name__ == "__main__":
 	t = time.time()
 	end = t + 20
 
+	transmitter.start()
+	receiver.start()
+
 	# continuously broadcast and receive for 20 seconds
 	while(t < end):
-		# send 10 character message (format - caruid:mid)
-		message = str(str(device_id) + ":" + str(n))
-		n += 1
-
-		transceiver.transmit(message)
-
-		msg = transceiver.receive()
-		if msg:
-			arrive_time = time.time()
-			_record_packet(msg, arrive_time)
-
 		t = time.time()
 
 	# report on packets collected
 	_report()
+	exit()
 
 
