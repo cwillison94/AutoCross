@@ -1,7 +1,7 @@
 # hardware module
 
 import sys
-sys.path.insert(0, "./lib/")
+sys.path.insert(0, "../lib/")
 
 
 import RPi.GPIO as GPIO
@@ -68,10 +68,9 @@ class Transceiver:
 
 	def receive(self):
 
-    	if self.radio.available(0):
-    		receivedMessage = []
-    		self.radio.read(receivedMessage, self.radio.getDynamicPayloadSize())
-    		return receivedMessage
-
+    		if self.radio.available(0):
+    			receivedMessage = []
+    			self.radio.read(receivedMessage, self.radio.getDynamicPayloadSize())
+    			return receivedMessage
 		return False
 

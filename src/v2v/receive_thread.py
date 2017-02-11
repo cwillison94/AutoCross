@@ -9,13 +9,13 @@ class ReceiveThread(Thread):
 		super(ReceiveThread, self).__init__()
 		self.transceiver = Transceiver(False)
 		self.callback = callback
-
+		self.running = True
 
 	def run(self):
-		while True:
+		while self.running:
 			msg = self.transceiver.receive()
 			if msg:
 				self.callback(msg)
-
+		print('receive thread done')
 
 

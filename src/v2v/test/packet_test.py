@@ -3,7 +3,6 @@ sys.path.insert(0, "../")
 from receive_thread import *
 from transmit_thread import *
 
-
 import time
 import os,binascii 
 import numpy as np, scipy.stats as st
@@ -14,15 +13,15 @@ total_invalid_packets = 0
 device_id = binascii.b2a_hex(os.urandom(3))
 
 n = 100000
-transmit_message = str(str(device_id) + ":" + str(n))
 
+transmit_message = str(str(device_id) + ":" + str(n))
 
 
 
 def _validate_message(message):
 	return isinstance(message, list) and len(message) == 13 and chr(message[6]) == ':'
 
-def _decode_message(raw_message):
+def _decode_message(msg):
 	string = ''.join(chr(e) for e in msg)
 	return string
 
@@ -30,7 +29,6 @@ def _record_packet(msg, arrival_time):
 
 	global packet_data
 	global total_invalid_packets
-
 
 	if _validate_message(msg):
 		decoded_message = _decode_message(msg)
@@ -44,7 +42,6 @@ def _record_packet(msg, arrival_time):
 		invalid_msg = _decode_message(msg)
 		print('invalid message recieved: ' + invalid_msg)
 		total_invalid_packets += 1
-
 
 
 def _report():
@@ -129,26 +126,20 @@ def on_message_received(msg):
 	arrive_time = time.time()
 	_record_packet(msg, arrive_time)
 
-
-def on_message_sent(transmit_thread):
-	global device_id
-
-	n = int(transmit_thread.get_message()[7:])
+def on_message_sent(msg):
+	global n, device_id
+	global transmitter
 	n +=1
 	new_msg = str(str(device_id) + ":" + str(n))
-	transmit_thread.set_message(new_msg)
+	transmitter.set_message(new_msg)
 
 
+receiver = ReceiveThread(on_message_received)
+transmitter = TransmitThread(transmit_message, on_message_sent)
 
 if __name__ == "__main__":
 
-	global transmit_message, n
-
 	print('')
-
-	receiver = ReceiveThread(on_message_received)
-	transmitter = TransmitThread(transmit_message)
-
 	time.sleep(1)
 	print('Device ID: '+ device_id)
 	time.sleep(1)
@@ -163,9 +154,11 @@ if __name__ == "__main__":
 	# continuously broadcast and receive for 20 seconds
 	while(t < end):
 		t = time.time()
-
+		time.sleep(2)
+		print ('working')
 	# report on packets collected
+	transmitter.running = False
+	receiver.running = False
 	_report()
-	exit()
 
 
