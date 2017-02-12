@@ -1,4 +1,5 @@
 import math
+  
 
 def slope(p1, p2):
     #p1 = [x1, y1]
@@ -11,18 +12,29 @@ def line(p1, p2):
 	x_0, y_0 = p1
 	b = y_0 - m * x_0
 	return m, b
-	
-def split_lines(lines, mid_point):
+
+def line_calc(m, b, x):
+    return m*x + b
+
+def line_inv_calc(m, b, y):
+    return (y - b)/m
+    
+def split_lines(lines, mid_point, height):
 	lines_left = []
 	lines_right = []
 	
 	for i in range(len(lines)):
 		x1, y1, x2, y2 = lines[i]
-		if x1 < mid_point or x2 < mid_point:
-			lines_left += [[x1, y1, x2, y2]]
-		if x2 > mid_point or x2 > mid_point:
-			lines_right+= [[x1, y1, x2, y2]]
+		m, b = line((x1, y1), (x2, y2))
+
+		x = line_inv_calc(m, b, height)
+		print pt
+		if pt < mid_point:
+                    lines_left += [[x1, y1, x2, y2]]
+		else:
+                    lines_right+= [[x1, y1, x2, y2]]
 	return lines_left, lines_right
+
 	
 
 def distance(p1, p2):

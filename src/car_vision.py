@@ -8,6 +8,8 @@ from picamera.array import PiRGBArray
 from picamera import PiCamera
 import line_helper
 import argparse
+import track
+import detect
 
 
 p = argparse.ArgumentParser()
@@ -27,19 +29,22 @@ DEFAULT_RESOLUTION_HEIGHT = 608
 
 HOUGH_LINE_RHO = 1
 HOUGH_LINE_THRESHOLD = 75
-HOUGH_LINE_MIN_LENGTH = 40
-HOUGH_LINE_MAX_GAP = 10
+HOUGH_LINE_MIN_LENGTH = 60
+HOUGH_LINE_MAX_GAP = 20
 
 CAMERA_ALPHA = 8.0 * math.pi / 180
 CAMERA_V_0 = 119.865631204
 CAMERA_A_Y = 32.262498472
 
-LANE_ROI = DEFAULT_RESOLUTION_HEIGHT - 0.40 * DEFAULT_RESOLUTION_HEIGHT
+LANE_ROI =  0.40 * DEFAULT_RESOLUTION_HEIGHT
+
+print "Lane ROI horizontal ", LANE_ROI
 
 
 STOP_SIGN_HEIGHT = 15 #cm
 
 def drawBoxes(rects, img):
+
     for x1, y1, x2, y2 in rects:
         cv2.rectangle(img, (x1, y1), (x2, y2), (127, 255, 0), 2)
 
@@ -47,9 +52,8 @@ def drawText(img, message):
    cv2.putText(img, message, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1)
 
 def detectLines(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    (thresh, img_bw) = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-    img_bw = cv2.GaussianBlur(img_bw, (3, 3), 0)
+    (thresh, img_bw) = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)
+    img_bw = cv2.GaussianBlur(img_bw, (5, 5), 0)
     #gray = cv2.equalizeHist(gray)
 
     # smooth and canny edge detection
@@ -59,40 +63,42 @@ def detectLines(img):
     lines = cv2.HoughLinesP(canny, HOUGH_LINE_RHO, np.pi/180, HOUGH_LINE_THRESHOLD, minLineLength = HOUGH_LINE_MIN_LENGTH, maxLineGap = HOUGH_LINE_MAX_GAP)
 
     if (lines is None or len(lines) == 0):
-        return [], img
+        return []
 
-    return lines, img
+    return lines
 
 def detectStopSign(cascade, img):
-    rects = cascade.detectMultiScale(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (20, 20))
+    rects = cascade.detectMultiScale(img, 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (20, 20))
 
     if len(rects) == 0:
-        return [], img
+        return []
     rects[:, 2:] += rects[:, :2]
 
-    return rects, img
+    return rects
 
 def detectLanes(lines):
-    filtered_lines = horizontalFilter(lines[:,0], LANE_ROI, DEFAULT_RESOLUTION_HEIGHT)
+    
+    filtered_lines = horizontal_filter(lines[:,0], LANE_ROI, DEFAULT_RESOLUTION_HEIGHT)
+    
 
-    lines_left, lines_right = line_helper.split_lines(filtered_lines, DEFAULT_RESOLUTION_WIDTH/2.)
+    #lines_left, lines_right = line_helper.split_lines(filtered_lines, DEFAULT_RESOLUTION_WIDTH/2.)
 
-    print "left ", lines_left
-    print "right ", lines_right
+    #print "left ", lines_left
+    #print "right ", lines_right
 
-    inner_left_m, inner_left_b = find_inner_line(lines_left)
-    inner_right_m, inner_right_b = find_inner_line(lines_right)
+    #inner_left_m, inner_left_b = find_inner_line(lines_left)
+    #inner_right_m, inner_right_b = find_inner_line(lines_right)
 
-    print "inner left ", inner_left_m, inner_left_b
-    print "inner right ", inner_right_m, inner_right_b
+    #print "inner left ", inner_left_m, inner_left_b
+    #print "inner right ", inner_right_m, inner_right_b
 
 
 
-    return [
-        [DEFAULT_RESOLUTION_WIDTH, int(inner_left_m * DEFAULT_RESOLUTION_WIDTH + inner_left_b), 0, int(inner_left_m * 0 + inner_left_b)],
-        [DEFAULT_RESOLUTION_WIDTH, int(inner_right_m * DEFAULT_RESOLUTION_WIDTH + inner_right_b), 0, int(inner_right_m * 0 + inner_right_b)]
-    ]
-    #return filteredLines
+    #return [
+    #    [DEFAULT_RESOLUTION_WIDTH, int(inner_left_m * DEFAULT_RESOLUTION_WIDTH + inner_left_b), 0, int(inner_left_m * 0 + inner_left_b)],
+    #    [DEFAULT_RESOLUTION_WIDTH, int(inner_right_m * DEFAULT_RESOLUTION_WIDTH + inner_right_b), 0, int(inner_right_m * 0 + inner_right_b)]
+    #]
+    return filtered_lines
 
 def find_inner_line(lines):
     if len(lines) > 0:
@@ -111,7 +117,7 @@ def find_inner_line(lines):
         return 0, 0
 
 
-def horizontalFilter(lines, minValue, maxValue):
+def horizontal_filter(lines, minValue, maxValue):
     linesFiltered = []
     for i in range(len(lines)):
         x1, y1, x2, y2 = lines[i]
@@ -152,59 +158,83 @@ def determineStopSignal(stop_sign_buffer, rects):
         return False, -1
 
 def startVision():
-    camera = PiCamera()
-    camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
-    camera.framerate = 32
-    rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
+    try:
 
-    #let camera start up
-    time.sleep(0.5)
+        camera = PiCamera()
+        camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
+        camera.framerate = 32
+        rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
 
-    #cv2.startWindowThread()
-    #cv2.namedWindow("auto-live")
+        #let camera start up
+        time.sleep(0.5)
 
-
-    stopSignCascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
+        stopSignCascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
 
 
-    stop_sign_buffer_count = [0]
+        stop_sign_buffer_count = [0]
+
+        print "Starting... press q or ctrl+C to quit"
+
+        ticks = 0
+
+        lt = track.LaneTracker(2, 0.1, 608)
+        ld = detect.LaneDetector(200)
 
 
+        for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
-    for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+            img = frame.array
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            rawCapture.truncate(0)
 
-        img = frame.array
-        rawCapture.truncate(0)
+            rects = detectStopSign(stopSignCascade, img)
 
-        rects, img = detectStopSign(stopSignCascade, img)
+            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
 
-        stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+            drawBoxes(rects, img)
 
-        drawBoxes(rects, img)
+            lines = detectLines(img_gray)
 
-        lines, img = detectLines(img)
+            precTick = ticks
+            ticks = cv2.getTickCount()
+            dt = (ticks - precTick) / cv2.getTickFrequency()
 
-        if stopSignDetected:
-            print "STOP SIGN DETECTED"
+
+            predicted = lt.predict(dt)
+
+            lanes = ld.detect(img)
+
+            if predicted is not None:
+                cv2.line(img, (predicted[0][0], predicted[0][1]), (predicted[0][2], predicted[0][3]), (0, 0, 255), 5)
+                cv2.line(img, (predicted[1][0], predicted[1][1]), (predicted[1][2], predicted[1][3]), (0, 0, 255), 5)
+
+            lt.update(lanes)
+
+            #print "lines ",lines
+
+            if stopSignDetected:
+                print "STOP SIGN DETECTED"
+                if not(HEADLESS):
+                    drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
+
+            #TODO: process lines to detect lanes via length, and location
+##            if len(lines) != 0:
+##                lanes = detectLanes(lines)
+##                if not(HEADLESS):
+##                    drawLanes(lanes, img)
+
             if not(HEADLESS):
-                drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
+                cv2.imshow("auto-live", img)
 
-        #TODO: process lines to detect lanes via length, and location
-        if len(lines) != 0:
-            if not(HEADLESS):
-                lines = detectLanes(lines)
-                drawLanes(lines, img)
+                cv2.waitKey(10)
+            else:
+                cv2.waitKey(0)
 
-        if not(HEADLESS):
-            cv2.imshow("auto-live", img)
+    except KeyboardInterrupt:
+        cv2.destroyAllWindows()
+        #I am really not sure why this works... I need to commit
+        for i in range(4):
+            cv2.waitKey(1)
 
-
-
-        if(cv2.waitKey(10) & 0xFF == ord('q')):
-            cv2.destroyAllWindows()
-            #I am really not sure why this works... I need to commit
-            for i in range(4):
-                cv2.waitKey(1)
-            break
 
 if __name__ == "__main__": startVision()
