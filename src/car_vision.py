@@ -1,5 +1,5 @@
-#opens up a webcam feed so you can then test your classifer in real time
-#using detectMultiScale
+import sys
+sys.path.append('/usr/local/lib/python2.7/site-packages')
 import numpy as np
 import cv2
 import time
@@ -8,15 +8,18 @@ from picamera.array import PiRGBArray
 from picamera import PiCamera
 import line_helper
 import argparse
-import track
 import detect
+import track
+import steering
+import car_motor
 
 
 p = argparse.ArgumentParser()
 p.add_argument("-hl", "--headless", help="Run in headless mode", action="store_true")
 
 args = p.parse_args()
-HEADLESS = args.headless
+HEADLESS = False #args.headless
+DEBUG_MODE = False
 
 print "HEADLESS = ", HEADLESS
 
@@ -28,28 +31,33 @@ DEFAULT_RESOLUTION_WIDTH = 608
 DEFAULT_RESOLUTION_HEIGHT = 608
 
 HOUGH_LINE_RHO = 1
-HOUGH_LINE_THRESHOLD = 75
-HOUGH_LINE_MIN_LENGTH = 60
-HOUGH_LINE_MAX_GAP = 20
+HOUGH_LINE_THRESHOLD = 30
+HOUGH_LINE_MIN_LENGTH = 10
+HOUGH_LINE_MAX_GAP = 30
 
 CAMERA_ALPHA = 8.0 * math.pi / 180
 CAMERA_V_0 = 119.865631204
 CAMERA_A_Y = 32.262498472
 
-LANE_ROI =  0.40 * DEFAULT_RESOLUTION_HEIGHT
-
-print "Lane ROI horizontal ", LANE_ROI
+CAMERA_X_OFFSET = 0
+CONTROLLER_K_P = 0.70
+CONTROLLER_K_I = 0
+CONTROLLER_K_D = 0.14
+CONTROLLER_ANGLE_SCALE = 10
 
 
 STOP_SIGN_HEIGHT = 15 #cm
+
+car_steering = steering.Steering()
+car_motor = car_motor.CarMotor()
 
 def drawBoxes(rects, img):
 
     for x1, y1, x2, y2 in rects:
         cv2.rectangle(img, (x1, y1), (x2, y2), (127, 255, 0), 2)
 
-def drawText(img, message):
-   cv2.putText(img, message, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1)
+def drawText(img, message, location = (50, 50)):
+   cv2.putText(img, message, location, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 1)
 
 def detectLines(img):
     (thresh, img_bw) = cv2.threshold(img, 200, 255, cv2.THRESH_BINARY)
@@ -77,9 +85,7 @@ def detectStopSign(cascade, img):
     return rects
 
 def detectLanes(lines):
-    
-    filtered_lines = horizontal_filter(lines[:,0], LANE_ROI, DEFAULT_RESOLUTION_HEIGHT)
-    
+    return lines[:,0]
 
     #lines_left, lines_right = line_helper.split_lines(filtered_lines, DEFAULT_RESOLUTION_WIDTH/2.)
 
@@ -98,7 +104,7 @@ def detectLanes(lines):
     #    [DEFAULT_RESOLUTION_WIDTH, int(inner_left_m * DEFAULT_RESOLUTION_WIDTH + inner_left_b), 0, int(inner_left_m * 0 + inner_left_b)],
     #    [DEFAULT_RESOLUTION_WIDTH, int(inner_right_m * DEFAULT_RESOLUTION_WIDTH + inner_right_b), 0, int(inner_right_m * 0 + inner_right_b)]
     #]
-    return filtered_lines
+    #return filtered_lines
 
 def find_inner_line(lines):
     if len(lines) > 0:
@@ -162,7 +168,7 @@ def startVision():
 
         camera = PiCamera()
         camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
-        camera.framerate = 32
+        camera.framerate = 50
         rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
 
         #let camera start up
@@ -176,65 +182,112 @@ def startVision():
         print "Starting... press q or ctrl+C to quit"
 
         ticks = 0
+        ld = detect.LaneDetector(300)
 
-        lt = track.LaneTracker(2, 0.1, 608)
-        ld = detect.LaneDetector(200)
+        prev_car_error = 0
+        integral = 0
 
 
         for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
             img = frame.array
-            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            #img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             rawCapture.truncate(0)
-
-            rects = detectStopSign(stopSignCascade, img)
-
-            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
-
-            drawBoxes(rects, img)
-
-            lines = detectLines(img_gray)
 
             precTick = ticks
             ticks = cv2.getTickCount()
             dt = (ticks - precTick) / cv2.getTickFrequency()
 
+            rects = detectStopSign(stopSignCascade, img)
+            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+            drawBoxes(rects, img)
 
-            predicted = lt.predict(dt)
+            car_mid = img.shape[0]/2 + CAMERA_X_OFFSET
 
             lanes = ld.detect(img)
 
-            if predicted is not None:
-                cv2.line(img, (predicted[0][0], predicted[0][1]), (predicted[0][2], predicted[0][3]), (0, 0, 255), 5)
-                cv2.line(img, (predicted[1][0], predicted[1][1]), (predicted[1][2], predicted[1][3]), (0, 0, 255), 5)
+            #print "lanes = ", lanes
 
-            lt.update(lanes)
+            try:
 
-            #print "lines ",lines
+                left_lane = lanes[0]
+            except:
+                left_lane = None
+
+            try:
+                right_lane = lanes[1]
+            except:
+                left_lane = None
+
+            if left_lane != None and right_lane!= None:
+                if car_motor.moving != True:
+                    #pass
+                    car_motor.set_percent_power(15)
+
+                base_left = left_lane[4]
+                base_right = right_lane[4]
+                theta_left = left_lane[5]
+                theta_right = right_lane[5]
+
+                avg_angle = (theta_left + theta_right)/2.
+
+                car_error = (base_right + base_left)/2 #+ -1 * CONTROLLER_ANGLE_SCALE * avg_angle
+                integral = integral + car_error * dt
+                derivative = (car_error - prev_car_error)/dt
+
+                output = CONTROLLER_K_P * car_error + CONTROLLER_K_I * integral + CONTROLLER_K_D * derivative
+                prev_car_error = car_error
+
+                car_steering.set_percent_direction(output)
+
+                #print "left=" + str(base_left) + " right=" + str(base_right)
+                #print "Theta Left=" + str(theta_left) + " theta right=" + str(theta_right)
+                #print "average angle: " + str(avg_angle)
+                #print "Percent direction: ", output
+
+                if not(HEADLESS):
+                    drawText(img, "steering %.1f " % output, (50, 300))
+                    cv2.line(img, (left_lane[0], left_lane[1]), (left_lane[2], left_lane[3]), (0, 0, 255), 5)
+                    cv2.line(img, (right_lane[0], right_lane[1]), (right_lane[2], right_lane[3]), (0, 0, 255), 5)
+            else:
+                print "No lanes detected"
+                car_motor.stop()
+                #stop car
+
+            if not(HEADLESS):
+                cv2.line(img, (car_mid, 0), (car_mid, img.shape[1]),(0, 255,0), 5)
 
             if stopSignDetected:
                 print "STOP SIGN DETECTED"
                 if not(HEADLESS):
                     drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
 
-            #TODO: process lines to detect lanes via length, and location
-##            if len(lines) != 0:
-##                lanes = detectLanes(lines)
-##                if not(HEADLESS):
-##                    drawLanes(lanes, img)
+            if DEBUG_MODE:
+                #TODO: process lines to detect lanes via length, and location
+                lines = detectLines(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+                if len(lines) != 0:
+                    lanes = detectLanes(lines)
+                    if not(HEADLESS):
+                        drawLanes(lanes, img)
 
             if not(HEADLESS):
                 cv2.imshow("auto-live", img)
 
-                cv2.waitKey(10)
-            else:
-                cv2.waitKey(0)
+                cv2.waitKey(5)
+            #else:
+                #cv2.waitKey(5)
 
     except KeyboardInterrupt:
+
+        car_motor.stop()
         cv2.destroyAllWindows()
         #I am really not sure why this works... I need to commit
         for i in range(4):
             cv2.waitKey(1)
+        raise
+    except:
+        car_motor.stop()
+        raise
 
 
 if __name__ == "__main__": startVision()

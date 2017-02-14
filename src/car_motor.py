@@ -17,25 +17,31 @@ PULSEWIDTH_RANGE = PULSEWIDTH_NEUTRAL - PULSEWIDTH_FULL
 class CarMotor():
 	def __init__(self, motor_bmc_pin = DEFAULT_MOTOR_BCM_PIN):
 		self.motor_bmc_pin = motor_bmc_pin
+		self.moving = False
 
 		self.pi = pigpio.pi()
 		self.set_percent_power(0)
 
 	def set_percent_power(self, percent):
 		if percent > 100:
-			print "Percent is out of range setting to 100"
+			self.moving = True
 			percent = 100
 		elif percent < MIN_PERCENT and not(percent == 0):
 			percent = MIN_PERCENT
+			self.moving = True
+		elif percent == 0:
+		    self.moving = False
 
 		self.pi.set_servo_pulsewidth(self.motor_bmc_pin, PULSEWIDTH_NEUTRAL - (percent/100.) * PULSEWIDTH_RANGE)
 
 	def stop_pwm(self):
 		#stop pwm on pin
+		self.moving = False
 		self.pi.set_servo_pulsewidth(self.motor_bmc_pin, 0)
 
 	def stop(self):
 		#stop pwm on pin
+		self.moving = False
 		self.set_percent_power(0)
 
 	def cleanup(self):

@@ -26,7 +26,6 @@ class Steering():
 
 	def set_percent_direction(self, percent):
 		if percent > 100:
-			print "Percent is out of range"
 			percent = 100
 		elif percent < -100:
 			percent = -100
