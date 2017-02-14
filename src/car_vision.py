@@ -18,7 +18,7 @@ p = argparse.ArgumentParser()
 p.add_argument("-hl", "--headless", help="Run in headless mode", action="store_true")
 
 args = p.parse_args()
-HEADLESS = False #args.headless
+HEADLESS = True #args.headless
 DEBUG_MODE = False
 
 print "HEADLESS = ", HEADLESS
@@ -42,7 +42,7 @@ CAMERA_A_Y = 32.262498472
 CAMERA_X_OFFSET = 0
 CONTROLLER_K_P = 0.70
 CONTROLLER_K_I = 0
-CONTROLLER_K_D = 0.14
+CONTROLLER_K_D = 0.05 #0.14
 CONTROLLER_ANGLE_SCALE = 10
 
 
@@ -168,7 +168,7 @@ def startVision():
 
         camera = PiCamera()
         camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
-        camera.framerate = 50
+        camera.framerate = 34
         rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
 
         #let camera start up
@@ -198,9 +198,11 @@ def startVision():
             ticks = cv2.getTickCount()
             dt = (ticks - precTick) / cv2.getTickFrequency()
 
-            rects = detectStopSign(stopSignCascade, img)
-            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
-            drawBoxes(rects, img)
+            print "Delta time = ", dt
+
+            #rects = detectStopSign(stopSignCascade, img)
+            #stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+            #drawBoxes(rects, img)
 
             car_mid = img.shape[0]/2 + CAMERA_X_OFFSET
 
@@ -257,25 +259,23 @@ def startVision():
             if not(HEADLESS):
                 cv2.line(img, (car_mid, 0), (car_mid, img.shape[1]),(0, 255,0), 5)
 
-            if stopSignDetected:
-                print "STOP SIGN DETECTED"
-                if not(HEADLESS):
-                    drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
+            #if stopSignDetected:
+                #print "STOP SIGN DETECTED"
+                #if not(HEADLESS):
+                    #drawText(img, "Status: STOP SIGN DETECTED dist=%.1fcm" % stopSignDistance)
 
-            if DEBUG_MODE:
-                #TODO: process lines to detect lanes via length, and location
-                lines = detectLines(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-                if len(lines) != 0:
-                    lanes = detectLanes(lines)
-                    if not(HEADLESS):
-                        drawLanes(lanes, img)
+            #if DEBUG_MODE:
+                ##TODO: process lines to detect lanes via length, and location
+                #lines = detectLines(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+                #if len(lines) != 0:
+                    #lanes = detectLanes(lines)
+                    #if not(HEADLESS):
+                        #drawLanes(lanes, img)
 
             if not(HEADLESS):
                 cv2.imshow("auto-live", img)
 
                 cv2.waitKey(5)
-            #else:
-                #cv2.waitKey(5)
 
     except KeyboardInterrupt:
 

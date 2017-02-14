@@ -39,7 +39,7 @@ class LaneDetector:
         # Compute the distance from the where the line crosses the bottom x-axis to the mid
         # mid-line
 
-        height *= 1
+        height *= 0.9
         if x2 == x1:
             return x1 - width/2
 
