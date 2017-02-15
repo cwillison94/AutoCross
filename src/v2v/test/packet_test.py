@@ -131,6 +131,7 @@ def on_message_sent(msg):
 	global transmitter
 	n +=1
 	new_msg = str(str(device_id) + ":" + str(n))
+	#print new_msg
 	transmitter.set_message(new_msg)
 
 
