@@ -12,6 +12,7 @@ import detect
 import track
 import steering
 import car_motor
+import sonar_range
 
 
 p = argparse.ArgumentParser()
@@ -39,10 +40,20 @@ CAMERA_ALPHA = 8.0 * math.pi / 180
 CAMERA_V_0 = 119.865631204
 CAMERA_A_Y = 32.262498472
 
+#WORKING SLOW SPEED VALUES
+# DON'T LOOSE ME
+# K_p = 0.7
+# K_i = 0
+# K_d = 0.15
 CAMERA_X_OFFSET = 0
-CONTROLLER_K_P = 0.70
+
+#CONTROLLER_K_P = 0.60
+#CONTROLLER_K_I = 0
+#CONTROLLER_K_D = 0.25
+
+CONTROLLER_K_P = 0.62 #0.63
 CONTROLLER_K_I = 0
-CONTROLLER_K_D = 0.05 #0.14
+CONTROLLER_K_D = 0.19
 CONTROLLER_ANGLE_SCALE = 10
 
 
@@ -50,6 +61,7 @@ STOP_SIGN_HEIGHT = 15 #cm
 
 car_steering = steering.Steering()
 car_motor = car_motor.CarMotor()
+ranger = sonar_range.ranger()
 
 def drawBoxes(rects, img):
 
@@ -198,7 +210,10 @@ def startVision():
             ticks = cv2.getTickCount()
             dt = (ticks - precTick) / cv2.getTickFrequency()
 
-            print "Delta time = ", dt
+            #print "Delta time = ", dt
+
+            range_dist = ranger.read_cm()
+            #print "Range =", range_dist
 
             #rects = detectStopSign(stopSignCascade, img)
             #stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
@@ -211,7 +226,6 @@ def startVision():
             #print "lanes = ", lanes
 
             try:
-
                 left_lane = lanes[0]
             except:
                 left_lane = None
@@ -221,10 +235,14 @@ def startVision():
             except:
                 left_lane = None
 
-            if left_lane != None and right_lane!= None:
+            if range_dist < 50:
+                car_motor.stop()
+                print "Object in range"
+
+            elif left_lane != None and right_lane!= None:
                 if car_motor.moving != True:
                     #pass
-                    car_motor.set_percent_power(15)
+                    car_motor.set_percent_power(13)
 
                 base_left = left_lane[4]
                 base_right = right_lane[4]

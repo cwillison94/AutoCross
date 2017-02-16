@@ -10,7 +10,7 @@ DEFAULT_MOTOR_BCM_PIN = 27
 PULSEWIDTH_NEUTRAL = 1500
 PULSEWIDTH_FULL = 1200 # this value can be decreased to go faster
 
-MIN_PERCENT = 15
+MIN_PERCENT = 10
 
 PULSEWIDTH_RANGE = PULSEWIDTH_NEUTRAL - PULSEWIDTH_FULL
 
@@ -18,6 +18,8 @@ class CarMotor():
 	def __init__(self, motor_bmc_pin = DEFAULT_MOTOR_BCM_PIN):
 		self.motor_bmc_pin = motor_bmc_pin
 		self.moving = False
+		
+		self.MIN_PERCENT = MIN_PERCENT
 
 		self.pi = pigpio.pi()
 		self.set_percent_power(0)
