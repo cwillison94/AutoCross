@@ -13,14 +13,14 @@ import track
 import steering
 import car_motor
 import sonar_range
-
+import timeit
 
 p = argparse.ArgumentParser()
 p.add_argument("-hl", "--headless", help="Run in headless mode", action="store_true")
 
 args = p.parse_args()
 HEADLESS = True #args.headless
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 print "HEADLESS = ", HEADLESS
 
@@ -33,7 +33,7 @@ DEFAULT_RESOLUTION_HEIGHT = 608
 
 HOUGH_LINE_RHO = 1
 HOUGH_LINE_THRESHOLD = 30
-HOUGH_LINE_MIN_LENGTH = 10
+HOUGH_LINE_MIN_LENGTH = 2
 HOUGH_LINE_MAX_GAP = 30
 
 CAMERA_ALPHA = 8.0 * math.pi / 180
@@ -180,7 +180,7 @@ def startVision():
 
         camera = PiCamera()
         camera.resolution = (DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT)
-        camera.framerate = 34
+        camera.framerate = 40
         rawCapture = PiRGBArray(camera, size=(DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT))
 
         #let camera start up
@@ -194,17 +194,20 @@ def startVision():
         print "Starting... press q or ctrl+C to quit"
 
         ticks = 0
-        ld = detect.LaneDetector(300)
+        ld = detect.LaneDetector(300, DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT, debug_mode = not(HEADLESS))
+
+        car_mid = DEFAULT_RESOLUTION_WIDTH/2 + CAMERA_X_OFFSET
 
         prev_car_error = 0
         integral = 0
 
 
         for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
-
+            loop_start = timeit.default_timer()
             img = frame.array
             #img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             rawCapture.truncate(0)
+
 
             precTick = ticks
             ticks = cv2.getTickCount()
@@ -219,11 +222,9 @@ def startVision():
             #stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
             #drawBoxes(rects, img)
 
-            car_mid = img.shape[0]/2 + CAMERA_X_OFFSET
+
 
             lanes = ld.detect(img)
-
-            #print "lanes = ", lanes
 
             try:
                 left_lane = lanes[0]
@@ -237,7 +238,7 @@ def startVision():
 
             if range_dist < 50:
                 car_motor.stop()
-                print "Object in range"
+                #print "Object in range"
 
             elif left_lane != None and right_lane!= None:
                 if car_motor.moving != True:
@@ -285,6 +286,7 @@ def startVision():
             #if DEBUG_MODE:
                 ##TODO: process lines to detect lanes via length, and location
                 #lines = detectLines(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+                #print "lines",lines
                 #if len(lines) != 0:
                     #lanes = detectLanes(lines)
                     #if not(HEADLESS):
@@ -294,6 +296,8 @@ def startVision():
                 cv2.imshow("auto-live", img)
 
                 cv2.waitKey(5)
+
+            #print "Loop time =\t", timeit.default_timer() - loop_start
 
     except KeyboardInterrupt:
 
