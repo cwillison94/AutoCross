@@ -26,8 +26,10 @@ print "HEADLESS = ", HEADLESS
 
 STOP_SIGN_HAAR = "stop_sign_haar.xml"
 
-CONSECUTIVE_BUFFER_SIZE = 5
-CONSECUTIVE_THRESHOLD = 0.50
+CONSECUTIVE_STOP_SIGN_BUFFER_SIZE = 5
+CONSECUTIVE_STOP_SIGN_THRESHOLD = 0.50
+
+
 DEFAULT_RESOLUTION_WIDTH = 608
 DEFAULT_RESOLUTION_HEIGHT = 608
 
@@ -88,11 +90,22 @@ def detectLines(img):
     return lines
 
 def detectStopSign(cascade, img):
-    rects = cascade.detectMultiScale(img, 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (20, 20))
+    img_roi = img[0:img.shape[1], img.shape[0]/2:img.shape[0]]
+    rects = cascade.detectMultiScale(cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY), 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (25, 25))
+
 
     if len(rects) == 0:
         return []
+
     rects[:, 2:] += rects[:, :2]
+
+    # shift back to original image
+    for i in range(len(rects)):
+        rects[i][0] += img.shape[0]/2
+        rects[i][2] += img.shape[0]/2
+
+        #rects[i][1] += img.shape[1]/2
+        #rects[i][3] += img.shape[1]/2
 
     return rects
 
@@ -156,17 +169,18 @@ def drawLanes(lines, img):
 def determineStopSignal(stop_sign_buffer, rects):
     stop_sign_buffer += [len(rects)]
 
-    if (len(stop_sign_buffer) >= CONSECUTIVE_BUFFER_SIZE):
+    if (len(stop_sign_buffer) >= CONSECUTIVE_STOP_SIGN_BUFFER_SIZE):
         stop_sign_buffer.pop(0)
 
         #check percentage
         threshold = float(sum(stop_sign_buffer))/float(len(stop_sign_buffer))
-        if (threshold >= CONSECUTIVE_THRESHOLD):
-            if len(rects) >0:
+        if (threshold >= CONSECUTIVE_STOP_SIGN_THRESHOLD):
+            if len(rects) > 0:
                 x1, y1, x2, y2 = rects[0]
                 # y position of target point P
-                v = (y2 + y1) / 2 -15
-                dist = STOP_SIGN_HEIGHT / math.tan(CAMERA_ALPHA + math.atan((v - CAMERA_V_0) / CAMERA_A_Y))
+                #v = (y2 + y1) / 2 -15
+                #dist = STOP_SIGN_HEIGHT / math.tan(CAMERA_ALPHA + math.atan((v - CAMERA_V_0) / CAMERA_A_Y))
+                dist = 0
                 return True, dist
             else:
                 return True, 0
@@ -205,9 +219,7 @@ def startVision():
         for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
             loop_start = timeit.default_timer()
             img = frame.array
-            #img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             rawCapture.truncate(0)
-
 
             precTick = ticks
             ticks = cv2.getTickCount()
@@ -218,62 +230,64 @@ def startVision():
             range_dist = ranger.read_cm()
             #print "Range =", range_dist
 
-            #rects = detectStopSign(stopSignCascade, img)
-            #stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
-            #drawBoxes(rects, img)
+            rects = detectStopSign(stopSignCascade, img)
+            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+            drawBoxes(rects, img)
 
-
-
-            lanes = ld.detect(img)
-
-            try:
-                left_lane = lanes[0]
-            except:
-                left_lane = None
-
-            try:
-                right_lane = lanes[1]
-            except:
-                left_lane = None
-
-            if range_dist < 50:
+            if stopSignDetected:
+                print "Stop Sign Detected"
                 car_motor.stop()
-                #print "Object in range"
-
-            elif left_lane != None and right_lane!= None:
-                if car_motor.moving != True:
-                    #pass
-                    car_motor.set_percent_power(13)
-
-                base_left = left_lane[4]
-                base_right = right_lane[4]
-                theta_left = left_lane[5]
-                theta_right = right_lane[5]
-
-                avg_angle = (theta_left + theta_right)/2.
-
-                car_error = (base_right + base_left)/2 #+ -1 * CONTROLLER_ANGLE_SCALE * avg_angle
-                integral = integral + car_error * dt
-                derivative = (car_error - prev_car_error)/dt
-
-                output = CONTROLLER_K_P * car_error + CONTROLLER_K_I * integral + CONTROLLER_K_D * derivative
-                prev_car_error = car_error
-
-                car_steering.set_percent_direction(output)
-
-                #print "left=" + str(base_left) + " right=" + str(base_right)
-                #print "Theta Left=" + str(theta_left) + " theta right=" + str(theta_right)
-                #print "average angle: " + str(avg_angle)
-                #print "Percent direction: ", output
-
-                if not(HEADLESS):
-                    drawText(img, "steering %.1f " % output, (50, 300))
-                    cv2.line(img, (left_lane[0], left_lane[1]), (left_lane[2], left_lane[3]), (0, 0, 255), 5)
-                    cv2.line(img, (right_lane[0], right_lane[1]), (right_lane[2], right_lane[3]), (0, 0, 255), 5)
             else:
-                print "No lanes detected"
-                car_motor.stop()
-                #stop car
+
+
+                lanes = ld.detect(img)
+
+                try:
+                    left_lane = lanes[0]
+                except:
+                    left_lane = None
+
+                try:
+                    right_lane = lanes[1]
+                except:
+                    left_lane = None
+
+                if range_dist < 50:
+                    car_motor.stop()
+                    #print "Object in range"
+
+                elif left_lane != None and right_lane!= None:
+                    if car_motor.moving != True:
+                        #pass
+                        car_motor.set_percent_power(13)
+
+                    base_left = left_lane[4]
+                    base_right = right_lane[4]
+                    theta_left = left_lane[5]
+                    theta_right = right_lane[5]
+
+                    car_error = (base_right + base_left)/2
+                    integral = integral + car_error * dt
+                    derivative = (car_error - prev_car_error)/dt
+
+                    output = CONTROLLER_K_P * car_error + CONTROLLER_K_I * integral + CONTROLLER_K_D * derivative
+                    prev_car_error = car_error
+
+                    car_steering.set_percent_direction(output)
+
+                    #print "left=" + str(base_left) + " right=" + str(base_right)
+                    #print "Theta Left=" + str(theta_left) + " theta right=" + str(theta_right)
+                    #print "average angle: " + str(avg_angle)
+                    #print "Percent direction: ", output
+
+                    if not(HEADLESS):
+                        drawText(img, "steering %.1f " % output, (50, 300))
+                        cv2.line(img, (left_lane[0], left_lane[1]), (left_lane[2], left_lane[3]), (0, 0, 255), 5)
+                        cv2.line(img, (right_lane[0], right_lane[1]), (right_lane[2], right_lane[3]), (0, 0, 255), 5)
+                else:
+                    print "No lanes detected"
+                    car_motor.stop()
+                    #stop car
 
             if not(HEADLESS):
                 cv2.line(img, (car_mid, 0), (car_mid, img.shape[1]),(0, 255,0), 5)

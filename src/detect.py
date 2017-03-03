@@ -64,7 +64,7 @@ class LaneDetector:
         # mid-line
 
         if x2 == x1:
-            return x1 - self.mix_x
+            return x1 - self.mid_x
 
         m = (y2-y1)/(x2-x1)
         b = y1 - m*x1
@@ -194,7 +194,7 @@ class LaneDetector:
                     right_lane.append(np.pi/2)
 
 
-            print "Lane fine time= \t", timeit.default_timer() - start_lane_find
+            #print "Lane fine time= \t", timeit.default_timer() - start_lane_find
 
 
             return [left_lane, right_lane]
