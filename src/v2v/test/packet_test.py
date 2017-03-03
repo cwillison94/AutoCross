@@ -1,7 +1,9 @@
+from threading import Condition
 import sys
 sys.path.insert(0, "../")
 from receive_thread import *
 from transmit_thread import *
+
 
 import time
 import os,binascii 
@@ -121,7 +123,7 @@ def _report():
 		print('\n99.99% confidence interval: ' + str(ci))
 		print('------------------------------------------\n')
 
-
+# thread callbacks
 def on_message_received(msg):
 	arrive_time = time.time()
 	_record_packet(msg, arrive_time)
@@ -134,9 +136,9 @@ def on_message_sent(msg):
 	#print new_msg
 	transmitter.set_message(new_msg)
 
-
-receiver = ReceiveThread(on_message_received)
-transmitter = TransmitThread(transmit_message, on_message_sent)
+condition = Condition()
+receiver = ReceiveThread(condition, on_message_received)
+transmitter = TransmitThread(transmit_message, condition, on_message_sent)
 
 if __name__ == "__main__":
 
@@ -144,7 +146,7 @@ if __name__ == "__main__":
 	time.sleep(1)
 	print('Device ID: '+ device_id)
 	time.sleep(1)
-	print('broadcast/recieve started...')
+	print('broadcast/receive started...')
 
 	t = time.time()
 	end = t + 20

@@ -14,6 +14,8 @@ import steering
 import car_motor
 import sonar_range
 import timeit
+#Abhi
+from threading import Thread
 
 p = argparse.ArgumentParser()
 p.add_argument("-hl", "--headless", help="Run in headless mode", action="store_true")
@@ -188,6 +190,11 @@ def determineStopSignal(stop_sign_buffer, rects):
             return False, -1
     else:
         return False, -1
+
+#Abhi - will get back to you later
+# def stopSignThreadOffload():
+#     while true:
+#         threading.Thread()
 
 def startVision():
     try:
