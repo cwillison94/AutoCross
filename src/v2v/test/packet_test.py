@@ -165,8 +165,8 @@ if __name__ == "__main__":
 	transmitter.running = False
 	receiver.running = False
 
-	transmitter.join()
-	receiver.join()
+	#transmitter.join()
+	#receiver.join()
 
 	_report()
 
