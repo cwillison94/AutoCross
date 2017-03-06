@@ -71,10 +71,11 @@ def _report():
 
 		# number of messages from sender
 		n = len(packet_data[key])
-
+		discard = int(n/10)
 		# find receival period since pi's are not synchronized
-		first_arrival_time = float(packet_data[key][0][1])
-		last_arrival_time = float(packet_data[key][-1][1])
+		# discard the first and last 10% of packets
+		first_arrival_time = float(packet_data[key][discard][1])
+		last_arrival_time = float(packet_data[key][discard*-1][1])
 		receive_time = last_arrival_time - first_arrival_time
 
 		# track interarrival times
@@ -82,7 +83,7 @@ def _report():
 
 		# number of lost packets
 		lost = 0
-		for i in range (1, n):
+		for i in range (discard + 1, n - discard):
 
 			# interarrival time
 			prev_arrival_time = float(packet_data[key][i-1][1])
@@ -109,7 +110,7 @@ def _report():
 		# 	print(interarrival_times[j])
 
 		print('\n------------- Sender: ' + str(key) + ' -------------')
-		print(str(n) + " messages received")
+		print(str(n) + " messages analyzed")
 		percent = str(float(n) / float(total_packets_received) * 100.0)
 		print(percent + "% of packets")
 		print('estimated packets lost: ' + str( str(lost) + ' ( ' + str( float(lost)/(lost + n) * 100 ) + '%)' ))
