@@ -98,6 +98,7 @@ def _report():
 		# statistics on interarrival distribution
 		average_interarrival_time = np.mean(interarrival_times)
 		max_interarrival_time = max(interarrival_times)
+		max_index = interarrival_times.index(max_interarrival_time)
 		min_interarrival_time = min(interarrival_times)
 		interarrival_variance = np.var(interarrival_times)
 		ci = st.t.interval(0.9999, len(interarrival_times)-1, loc=np.mean(interarrival_times), scale=st.sem(interarrival_times))
@@ -117,6 +118,7 @@ def _report():
 		print('')
 		print('average interarrival time: ') + str(average_interarrival_time)
 		print('max: ' + str(max_interarrival_time))
+		print('packet index of max: ' + str(max_index))
 		print('min: ' + str(min_interarrival_time))
 		print('interarrival variance: ' + str(interarrival_variance))
 
@@ -162,6 +164,10 @@ if __name__ == "__main__":
 	# report on packets collected
 	transmitter.running = False
 	receiver.running = False
+
+	transmitter.join()
+	receiver.join()
+
 	_report()
 
 
