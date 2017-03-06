@@ -11,7 +11,7 @@ class TransmitThread(Thread):
         self.condition = condition
         self.message = message
         self.callback = callback
-	self.running = True
+	    self.running = True
 
     def get_message(self):
     	return self.message
@@ -27,4 +27,4 @@ class TransmitThread(Thread):
 	    #time.sleep(0.000001)
             self.condition.notify()
             self.condition.wait()
-	print('transmit thread done')
+	    print('transmit thread done')
