@@ -14,7 +14,7 @@ class ReceiveThread(Thread):
 
 	def run(self):
 		while self.running:
-                        self.condition.acquire()
+			self.condition.acquire()
 			msg = self.transceiver.receive()
 			if msg:
 				self.callback and self.callback(msg)
