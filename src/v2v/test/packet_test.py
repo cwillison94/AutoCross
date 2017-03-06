@@ -50,18 +50,8 @@ def _report():
 	global packet_data
 	global total_invalid_packets
 
-	print('')
-
-	# total packets received from all senders
-	total_packets_received = sum(len(packet_data[key]) for key in packet_data)
-
-	print(str(total_packets_received) + " total valid packets received")
-	print(str(total_invalid_packets) + " total invalid packets received")
-
-	print('')
-
 	# remove junk from previous broadcasts on same channel	
-	for k, v in packet_data.items():
+        for k, v in packet_data.items():
 		if len(v) < 3 :
 			print('junk key ' + str(k) + ' deleted')
 			del packet_data[k]
@@ -70,12 +60,13 @@ def _report():
 	for key in packet_data:
 
 		# number of messages from sender
+		discard = int( len(packet_data[key])/10 )
+		packet_data[key] = packet_data[key][discard:-discard]
 		n = len(packet_data[key])
-		discard = int(n/10)
 		# find receival period since pi's are not synchronized
 		# discard the first and last 10% of packets
-		first_arrival_time = float(packet_data[key][discard][1])
-		last_arrival_time = float(packet_data[key][discard*-1][1])
+		first_arrival_time = float(packet_data[key][0][1])
+		last_arrival_time = float(packet_data[key][-1][1])
 		receive_time = last_arrival_time - first_arrival_time
 
 		# track interarrival times
@@ -83,7 +74,7 @@ def _report():
 
 		# number of lost packets
 		lost = 0
-		for i in range (discard + 1, n - discard):
+		for i in range (1, n):
 
 			# interarrival time
 			prev_arrival_time = float(packet_data[key][i-1][1])
@@ -108,6 +99,14 @@ def _report():
 		# r = min(len(interarrival_times), 5)
 		# for j in range(0, r):
 		# 	print(interarrival_times[j])
+
+		        # total packets received from all senders
+        	total_packets_received = sum(len(packet_data[key]) for key in packet_data)
+
+        	print(str(total_packets_received) + " total valid packets received")
+        	print(str(total_invalid_packets) + " total invalid packets received")
+
+        	print('')
 
 		print('\n------------- Sender: ' + str(key) + ' -------------')
 		print(str(n) + " messages analyzed")
