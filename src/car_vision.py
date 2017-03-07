@@ -14,6 +14,7 @@ import steering
 import car_motor
 import sonar_range
 import timeit
+import stop_sign_detector
 #Abhi
 from threading import Thread
 
@@ -30,7 +31,6 @@ STOP_SIGN_HAAR = "stop_sign_haar.xml"
 
 CONSECUTIVE_STOP_SIGN_BUFFER_SIZE = 5
 CONSECUTIVE_STOP_SIGN_THRESHOLD = 0.50
-
 
 DEFAULT_RESOLUTION_WIDTH = 608
 DEFAULT_RESOLUTION_HEIGHT = 608
@@ -65,7 +65,11 @@ STOP_SIGN_HEIGHT = 15 #cm
 
 car_steering = steering.Steering()
 car_motor = car_motor.CarMotor()
-ranger = sonar_range.ranger()
+ranger = sonar_range.Ranger()
+stop_detector = stop_sign_detector.StopSignDetector()
+
+sending_stop_signal = False
+stopping_car = False
 
 def drawBoxes(rects, img):
 
@@ -111,59 +115,10 @@ def detectStopSign(cascade, img):
 
     return rects
 
-def detectLanes(lines):
-    return lines[:,0]
-
-    #lines_left, lines_right = line_helper.split_lines(filtered_lines, DEFAULT_RESOLUTION_WIDTH/2.)
-
-    #print "left ", lines_left
-    #print "right ", lines_right
-
-    #inner_left_m, inner_left_b = find_inner_line(lines_left)
-    #inner_right_m, inner_right_b = find_inner_line(lines_right)
-
-    #print "inner left ", inner_left_m, inner_left_b
-    #print "inner right ", inner_right_m, inner_right_b
-
-
-
-    #return [
-    #    [DEFAULT_RESOLUTION_WIDTH, int(inner_left_m * DEFAULT_RESOLUTION_WIDTH + inner_left_b), 0, int(inner_left_m * 0 + inner_left_b)],
-    #    [DEFAULT_RESOLUTION_WIDTH, int(inner_right_m * DEFAULT_RESOLUTION_WIDTH + inner_right_b), 0, int(inner_right_m * 0 + inner_right_b)]
-    #]
-    #return filtered_lines
-
-def find_inner_line(lines):
-    if len(lines) > 0:
-        x1, y1, x2, y2 = lines[0]
-        current_right_most_line_m, current_right_most_line_b = line_helper.line([x1, y1], [x2, y2])
-        #consider changing to check point at x = 0 instead
-        for i in range(len(lines)):
-            x1, y1, x2, y2 = lines[i]
-            m, b = line_helper.line([x1, y1], [x2, y2])
-            if b <= current_right_most_line_b:
-                #better choice
-                current_right_most_line_m = m
-                current_right_most_line_b = b
-        return current_right_most_line_m, current_right_most_line_b
-    else:
-        return 0, 0
-
-
-def horizontal_filter(lines, minValue, maxValue):
-    linesFiltered = []
-    for i in range(len(lines)):
-        x1, y1, x2, y2 = lines[i]
-        if between(y1, minValue, maxValue) and between(y2, minValue, maxValue):
-            linesFiltered += [[x1, y1, x2, y2]]
-
-    return linesFiltered
-
-
 def between(value, minValue, maxValue):
     return value > minValue and value < maxValue
 
-def drawLanes(lines, img):
+def drawLines(lines, img):
     for i in range(len(lines)):
         x1, y1, x2, y2 = lines[i]
         cv2.line(img,(x1, y1),(x2, y2), (0, 255, 0), 2) #rem out if u want to used  polykines
@@ -196,7 +151,7 @@ def determineStopSignal(stop_sign_buffer, rects):
 #     while true:
 #         threading.Thread()
 
-def startVision():
+def start_vision():
     try:
 
         camera = PiCamera()
@@ -206,9 +161,6 @@ def startVision():
 
         #let camera start up
         time.sleep(0.5)
-
-        stopSignCascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
-
 
         stop_sign_buffer_count = [0]
 
@@ -222,6 +174,7 @@ def startVision():
         prev_car_error = 0
         integral = 0
 
+        stop_detector.start()
 
         for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
             loop_start = timeit.default_timer()
@@ -237,15 +190,34 @@ def startVision():
             range_dist = ranger.read_cm()
             #print "Range =", range_dist
 
-            rects = detectStopSign(stopSignCascade, img)
-            stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
-            drawBoxes(rects, img)
+            #rects = detectStopSign(stopSignCascade, img)
+            #stopSignDetected, stopSignDistance = determineStopSignal(stop_sign_buffer_count, rects)
+            #drawBoxes(rects, img)
 
-            if stopSignDetected:
-                print "Stop Sign Detected"
+            stop_detector.push_img(img)
+
+            stop_detected, normalized_dist = stop_detector.get_stop_info()
+
+            #TODO: Move logic into a car class
+
+            if stop_detected and normalized_dist > 55:
+                if stopping_car == False:
+                    stopping_car = True
+                    print "Stop Sign Detected - Stopping car"
+
+                drawText(img, "Stopping car")
                 car_motor.stop()
             else:
+                stopping_car = False
 
+                if stop_detected:
+                    if sending_stop_signal == False:
+                        sending_stop_signal = True
+                        print "Stop Sign Detected in distance - SEND SIGNAL ", normalized_dist
+
+                    drawText(img, "Sending stop detected")
+                else:
+                    sending_stop_signal = False
 
                 lanes = ld.detect(img)
 
@@ -261,7 +233,7 @@ def startVision():
 
                 if range_dist < 50:
                     car_motor.stop()
-                    #print "Object in range"
+                    print "Object in range"
 
                 elif left_lane != None and right_lane!= None:
                     if car_motor.moving != True:
@@ -311,7 +283,7 @@ def startVision():
                 #if len(lines) != 0:
                     #lanes = detectLanes(lines)
                     #if not(HEADLESS):
-                        #drawLanes(lanes, img)
+                        #drawLines(lanes, img)
 
             if not(HEADLESS):
                 cv2.imshow("auto-live", img)
@@ -323,14 +295,16 @@ def startVision():
     except KeyboardInterrupt:
 
         car_motor.stop()
+        stop_detector.stop()
         cv2.destroyAllWindows()
         #I am really not sure why this works... I need to commit
         for i in range(4):
             cv2.waitKey(1)
         raise
     except:
+        stop_detector.stop()
         car_motor.stop()
         raise
 
 
-if __name__ == "__main__": startVision()
+if __name__ == "__main__": start_vision()

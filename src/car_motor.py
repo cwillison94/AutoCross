@@ -63,19 +63,19 @@ if __name__ == "__main__":
 	while running:
 
 		try:
-			#pulse_width = input("pulse width= ")
+			pulse_width = input("pulse width= ")
 
-			#if pulse_width == -1:
-			#	running = False
-			#else:
-			#	motor.set_pulse_width(int(pulse_width))
-
-			percent = input("percent(0-100):")
-
-			if percent == -1:
+			if pulse_width == -1:
 				running = False
 			else:
-				motor.set_percent_power(int(percent))
+				motor.set_pulse_width(int(pulse_width))
+
+			# percent = input("percent(0-100):")
+
+			# if percent == -1:
+			# 	running = False
+			# else:
+			# 	motor.set_percent_power(int(percent))
 
 
 		except KeyboardInterrupt:
