@@ -1,6 +1,7 @@
 import os, sys
 sys.path.insert(0, "../")
 from v2v_module import *
+from constants import *
 
 
 """
@@ -15,7 +16,8 @@ wait for all clear signal from module
 send in_transit signal
 """
 
-def send_stopped_signal():
+def send_stopped_signal(direction):
+
 
 
 def send_transit_signal():
