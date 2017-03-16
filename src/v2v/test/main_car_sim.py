@@ -31,8 +31,6 @@ def get_ready_signal(module):
 	return v2v_module.get_transit_permission()
 
 
-
-
 if __name__ == "__main__":
 
 	v2v_module = V2VModule()
@@ -51,8 +49,6 @@ if __name__ == "__main__":
 			print(get_ready_signal(v2v_module))
 
 
-
-
 	except KeyboardInterrupt:
-		console.log("Keyboard interrupt. Exiting.")
-		sys.exit()
+		print("Keyboard interrupt. Exiting.")
+		sys.exit(0)
