@@ -50,6 +50,8 @@ def _report():
 	global packet_data
 	global total_invalid_packets
 
+	print 'generating report...'
+
 	# remove junk from previous broadcasts on same channel	
         for k, v in packet_data.items():
 		if len(v) < 3 :
@@ -58,7 +60,7 @@ def _report():
 
 	# report on packets from each individual sender
 	for key in packet_data:
-
+		print('key' + str(key))
 		# number of messages from sender
 		discard = int( len(packet_data[key])/10 )
 		packet_data[key] = packet_data[key][discard:-discard]
@@ -86,7 +88,7 @@ def _report():
 			packet_id = int(packet_data[key][i][0])
 			lost = lost + (packet_id - prev_packet_id - 1)
 
-
+		print ('getting stats for key' + str(key))
 		# statistics on interarrival distribution
 		average_interarrival_time = np.mean(interarrival_times)
 		max_interarrival_time = max(interarrival_times)
@@ -124,7 +126,7 @@ def _report():
 
 		print('\n99.99% confidence interval: ' + str(ci))
 		print('------------------------------------------\n')
-
+	print 'report done'
 # thread callbacks
 def on_message_received(msg):
 	arrive_time = time.time()
@@ -147,11 +149,23 @@ if __name__ == "__main__":
 	print('')
 	time.sleep(1)
 	print('Device ID: '+ device_id)
+
+	if transmitter.transceiver.radio.get_status() == 0:
+		print 'Error initializing transmitter. Check your hardware.'
+		sys.exit(0)
+	else:
+		print 'Transmitter OK'
+	if receiver.transceiver.radio.get_status() == 0:
+                print 'Error initializing receiver. Check your hardware.'
+                sys.exit(0)
+	else:
+		print 'Receiver OK'	
+	
 	time.sleep(1)
 	print('broadcast/receive started...')
 
 	t = time.time()
-	end = t + 20
+	end = t + 5
 
 	transmitter.start()
 	receiver.start()
@@ -164,7 +178,6 @@ if __name__ == "__main__":
 	# report on packets collected
 	transmitter.running = False
 	receiver.running = False
-
 	#transmitter.join()
 	#receiver.join()
 

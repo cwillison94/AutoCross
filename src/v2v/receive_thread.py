@@ -23,7 +23,7 @@ class ReceiveThread(Thread):
 				self.callback and self.callback(msg)
 				#time.sleep(0.000001)
 			self.condition.notify()
-			self.condition.wait()
+			self.condition.wait(5)
 		print('receive thread done')
 
 

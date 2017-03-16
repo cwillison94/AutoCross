@@ -30,5 +30,5 @@ class TransmitThread(Thread):
 				self.transceiver.transmit( self.message )
 				self.callback and self.callback(self.message)
 			self.condition.notify()
-			self.condition.wait()
+			self.condition.wait(5)
 		print('transmit thread done')
