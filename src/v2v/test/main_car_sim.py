@@ -16,15 +16,19 @@ wait for all clear signal from module
 send in_transit signal
 """
 
-def send_stopped_signal(direction):
+def send_stopped_signal(module, direction):
+	module.set_stopped(direction)
 
 
+def send_transit_signal(module):
+	module.set_in_transit()
 
-def send_transit_signal():
+def send_cleared_signal(module):
+	module.set_cleared()
 
 
-def get_ready_signal():
-	return v2v_module.getTransitPermission()
+def get_ready_signal(module):
+	return v2v_module.get_transit_permission()
 
 
 
@@ -44,6 +48,7 @@ if __name__ == "__main__":
 	try:
 		while True:
 			time.sleep(1)
+			print(get_ready_signal(v2v_module))
 
 
 

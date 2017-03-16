@@ -229,14 +229,17 @@ class V2VModule(Thread):
 
 	# 1 arrive at intersection
 	def set_stopped(self, direction):
+		print('Stopped state received from main controller')
 		self.direction = direction
 		self.arrival_time = time.time()
 		self.state = STOPPED
 
 	# 2 driving through intersection after receiving permission
 	def set_in_transit(self):
+		print('In transit state received from main controller')
 		self.state = IN_TRANSIT
 
 	# 3 left intersection
 	def set_cleared(self):
+		print('Cleared state received from main controller')
 		self.state = CLEARED
