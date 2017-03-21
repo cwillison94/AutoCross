@@ -27,7 +27,7 @@ see documentation (requirements, V&V) for details.
 1. A vehicle already in the intersection takes precedence over all other vehicles.
 
 2. All vehicles must wait for a minimum time equal to BUFFER_PERIOD before entering
-intersection, ​ in all circumstances.
+intersection, in all circumstances.
 
 3. Vehicles which arrive ​ first take precedence, except in the following conditions
 
@@ -36,7 +36,7 @@ lane direction precedence* regardless of which vehicle was observed to arrive fi
 
 5. If a vehicle arrives (Car A) and observes another vehicle (Car B) in the o
 pposing parallel lane, Car A can enter the intersection as soon as its BUFFER_PERIOD elapses, as long
-as it does not receive a “transit completed” message from CAR B in that time.
+as it does not receive a "transit completed" message from CAR B in that time.
 
 *Vehicles in the NORTH/SOUTH lane take precedence over vehicles in the EAST/WEST lane.
 
@@ -50,9 +50,10 @@ class V2VModule(Thread):
 	MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$')
 
 
-
-	def __init__(self):
+	def __init__(self, debug_mode=False):
 		super(V2VModule, self).__init__()
+
+		self.debug_mode = debug_mode
 
 		# transmitter and receiver threads
 		#receiver callback : _on_message_received
@@ -81,8 +82,9 @@ class V2VModule(Thread):
 		_set_transmitter_state(IDLE)
 		transmitter.start()
 		receiver.start()
-
+		debug_print("V2V Module started.")
 		while self.running:
+
 
 			# do nothing until we get to an intersection
 			# during this time vehicle queue is constantly being updated as _on_message_received is triggered
@@ -90,28 +92,32 @@ class V2VModule(Thread):
 
 			# transmit STOPPED signal and wait for our turn to transit
 			if self.state == STOPPED:
+				debug_print("Stopped. Waiting for turn to transit.")
 				_set_transmitter_state(STOPPED)
 				time.sleep(BUFFER_PERIOD) # minimum time we have to wait
-				
+				debug_print("Minimum wait time (BUFFER_PERIOD = %.1f) elapsed." % (BUFFER_PERIOD))
+
 				# wait for our turn in queue to go, either when its our turn or if there is no one else
 				while not ( self.ready or len(self.vehicles.keys()) == 0 ):
 					time.sleep(0.1)
-
+				debug_print("ready flag set. broadcasting IN_TRANSIT signal.")
 				# our turn to go. set TRANSIT signal
 				_set_transmitter_state(IN_TRANSIT)
 
 				# wait for car controller to receive ready signal and drive through intersection
 				while self.state != IN_TRANSIT:
 					time.sleep(0.1)
+				debug_print("Entered intersection...")
 
 				# car is moving. wait until we have left intersection
 				while self.state != CLEARED:
 					time.sleep(0.1)
-
+				debug_print("Cleared intersection. Broadcasting CLEARED signal.")
 				# through intersection. broadcast CLEARED signal for 3 seconds.
 				_set_transmitter_state(CLEARED)
 				time.sleep(3)
 
+				debug_print("Returning to idle state.")
 				# go back to idle state until we arrive at intersection again
 				_set_idle()
 
@@ -229,17 +235,24 @@ class V2VModule(Thread):
 
 	# 1 arrive at intersection
 	def set_stopped(self, direction):
-		print('Stopped state received from main controller')
+		debug_print('Stopped state received from main controller')
 		self.direction = direction
 		self.arrival_time = time.time()
 		self.state = STOPPED
 
 	# 2 driving through intersection after receiving permission
 	def set_in_transit(self):
-		print('In transit state received from main controller')
+		debug_print('In transit state received from main controller')
 		self.state = IN_TRANSIT
 
 	# 3 left intersection
 	def set_cleared(self):
-		print('Cleared state received from main controller')
+		debug_print('Cleared state received from main controller')
 		self.state = CLEARED
+
+	# debugging
+	def debug_print(self, string):
+		if self.debug_mode:
+			print( str(DEVICE_ID) + ": " + string)
+
+
