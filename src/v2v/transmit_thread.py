@@ -11,6 +11,7 @@ class TransmitThread(Thread):
 		self.condition = condition
 		self.message = message
 		self.callback = callback
+		self.enabled = True
 		self.running = True
 
 	def get_message(self):
@@ -19,11 +20,15 @@ class TransmitThread(Thread):
 	def set_message(self, message):
 		self.message = message
 
+	def set_enabled(self, enabled):
+		self.enabled = enabled
+
 	def run(self):
 		while self.running:
 			self.condition.acquire()
-			self.transceiver.transmit( self.message )
-			self.callback and self.callback(self.message)
+			if self.enabled:
+				self.transceiver.transmit( self.message )
+				self.callback and self.callback(self.message)
 			self.condition.notify()
-			self.condition.wait()
+			self.condition.wait(5)
 		print('transmit thread done')
