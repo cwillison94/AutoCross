@@ -44,8 +44,7 @@ class Ranger:
       self.pi.set_mode(self._echo, pigpio.INPUT)
 
       self._cb = self.pi.callback(self._trig, pigpio.EITHER_EDGE, self._cbf)
-      self._cb = self.pi.callback(self._echo, pigpio.EITHER_EDGE, self._cbf)
-
+      
       self._inited = True
 
    def _cbf(self, gpio, level, tick):
@@ -75,7 +74,7 @@ class Ranger:
          self.pi.gpio_trigger(self._trig)
          start = time.time()
          while not self._ping:
-            if (time.time()-start) > 5.0:
+            if (time.time()-start) > 2.0:
                return 20000
             time.sleep(0.001)
          return self._time
@@ -83,7 +82,11 @@ class Ranger:
          return None
 
    def read_cm(self):
-       return self.read() / 1000000.0 *  17015 #34030
+       dist = self.read() / 1000000.0 *  17015
+       if dist < 2.0:
+           return 400
+       else:
+           return dist
 
    def cancel(self):
       """
@@ -110,15 +113,15 @@ if __name__ == "__main__":
     sonar_r = Ranger(RIGHT_SONAR_PINS)
 
     end = time.time() + 100.0
-    
+
     try:
 
         while time.time() < end:
 
-            print "Left: " + str(sonar_l.read_cm()) +" cm"
-            print "Front Left: " + str(sonar_fl.read_cm()) +" cm"
-            print "Front Right: " + str(sonar_fr.read_cm()) +" cm"
-            print "Right: " + str(sonar_r.read_cm()) +" cm"
+            print "Left: " + str(sonar_l.read_cm()) +" cm" #WORKING
+            print "Front Left: " + str(sonar_fl.read_cm()) +" cm" #WORKING
+            print "Front Right: " + str(sonar_fr.read_cm()) +" cm" #WORKING
+            #print "Right: " + str(sonar_r.read_cm()) +" cm"
             time.sleep(0.03)
     except KeyboardInterrupt:
 

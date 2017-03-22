@@ -6,10 +6,8 @@ import time
 import math
 from picamera.array import PiRGBArray
 from picamera import PiCamera
-import line_helper
 import argparse
-import detect
-import track
+import lane_detector
 import steering
 import car_motor
 import sonar_range
@@ -55,10 +53,20 @@ CAMERA_X_OFFSET = 0
 #CONTROLLER_K_I = 0
 #CONTROLLER_K_D = 0.25
 
-CONTROLLER_K_P = 0.62 #0.63
+#WITH BASE DISTANCE MODIFIER
+CONTROLLER_K_P = 0.65 #0.63
 CONTROLLER_K_I = 0
 CONTROLLER_K_D = 0.19
+
+
+#NO BASE DISTANCE MODIFIER
+#CONTROLLER_K_P = 0.65 #0.63
+#CONTROLLER_K_I = 0
+#CONTROLLER_K_D = 0.2
+
 CONTROLLER_ANGLE_SCALE = 10
+
+CAR_POWER = 0
 
 
 STOP_SIGN_HEIGHT = 15 #cm
@@ -167,7 +175,7 @@ def start_vision():
         print "Starting... press q or ctrl+C to quit"
 
         ticks = 0
-        ld = detect.LaneDetector(300, DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT, debug_mode = not(HEADLESS))
+        ld = lane_detector.LaneDetector(300, DEFAULT_RESOLUTION_WIDTH, DEFAULT_RESOLUTION_HEIGHT, debug_mode = not(HEADLESS))
 
         car_mid = DEFAULT_RESOLUTION_WIDTH/2 + CAMERA_X_OFFSET
 
@@ -200,25 +208,13 @@ def start_vision():
 
             #TODO: Move logic into a car class
 
-            if stop_detected and normalized_dist > 55:
-                if stopping_car == False:
-                    stopping_car = True
-                    print "Stop Sign Detected - Stopping car"
+            
 
+            if stop_detected and normalized_dist < 70:
                 drawText(img, "Stopping car")
                 car_motor.stop()
             else:
-                stopping_car = False
-
-                if stop_detected:
-                    if sending_stop_signal == False:
-                        sending_stop_signal = True
-                        print "Stop Sign Detected in distance - SEND SIGNAL ", normalized_dist
-
-                    drawText(img, "Sending stop detected")
-                else:
-                    sending_stop_signal = False
-
+                # find lanes
                 lanes = ld.detect(img)
 
                 try:
@@ -238,7 +234,7 @@ def start_vision():
                 elif left_lane != None and right_lane!= None:
                     if car_motor.moving != True:
                         #pass
-                        car_motor.set_percent_power(13)
+                        car_motor.set_percent_power(CAR_POWER)
 
                     base_left = left_lane[4]
                     base_right = right_lane[4]
@@ -296,6 +292,7 @@ def start_vision():
 
         car_motor.stop()
         stop_detector.stop()
+        ranger.cancel()
         cv2.destroyAllWindows()
         #I am really not sure why this works... I need to commit
         for i in range(4):

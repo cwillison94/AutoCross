@@ -21,7 +21,7 @@ class StopSignDetector:
         self.img_queue.put(img)
 
     def update(self):
-    # keep looping infinitely until the thread is stopped
+        # keep looping infinitely until the thread is stopped
         while self.running:
             while not self.img_queue.empty():
                 img = self.img_queue.get()

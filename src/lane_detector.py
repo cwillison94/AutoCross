@@ -69,7 +69,9 @@ class LaneDetector:
         m = (y2-y1)/(x2-x1)
         b = y1 - m*x1
 
-        return (self.base_distance_height  - b)/m - self.mid_x
+        return (self.base_distance_height  - b)/m - self.mid_x, (self.height  - b)/m - self.mid_x
+        #return (self.height  - b)/m - self.mid_x
+
 
     def _scale_line(self, x1, y1, x2, y2):
         # scale the farthest point of the segment to be on the drawing horizon
@@ -138,27 +140,31 @@ class LaneDetector:
                     #TODO: Consider convert this to calculate slope and somehow normalizing? This could be faster than arctan
                     theta = np.arctan2(y2-y1, x2-x1)
                     theta_abs = np.abs(theta)  # line angle WRT horizon
-
-                    if theta_abs > ROI_THETA:  # ignore lines with a small angle WRT horizon
-                        dist = self.base_distance(x1, y1, x2, y2)
+                    theta_deg = np.rad2deg(theta)
+                    #if theta_abs > ROI_THETA:  # ignore lines with a small angle WRT horizon
+                    if np.abs(theta_deg) > 35:
+                        dist_with_modifier, dist = self.base_distance(x1, y1, x2, y2)
                         #upper_bound = 0.90 * frame.shape[1]
                         if left_bound is None and dist < 0 and x1 < self.mid_x and x2 < self.mid_x: # and (y1 > upper_bound or y2 > upper_bound): # and dist > -1* 1.2 * self.mid_x
                             left_bound = (x1, y1, x2, y2, theta)
                             left_dist = dist
+                            left_dist_modifier = dist_with_modifier
                             left_theta = theta
                         elif right_bound is None and dist > 0 and x1 > self.mid_x and x2 > self.mid_x: # and (y1 > upper_bound or y2 > upper_bound): #and dist < 1.2 * self.mid_x
                             right_bound = (x1, y1, x2, y2, theta)
                             right_dist = dist
+                            right_dist_modifier = dist_with_modifier
                             right_theta = theta
                         elif left_bound is not None and 0 > dist > left_dist  and x1 < self.mid_x and x2 < self.mid_x: # and (y1 > upper_bound or y2 > upper_bound): # and dist > -1* 1.2 * self.mid_x
                             left_bound = (x1, y1, x2, y2, theta)
                             left_dist = dist
+                            left_dist_modifier = dist_with_modifier
                             left_theta = theta
                         elif right_bound is not None and 0 < dist < right_dist and x1 > self.mid_x and x2 > self.mid_x: # and (y1 > upper_bound or y2 > upper_bound): # and dist < 1.2 * self.mid_x
                             right_bound = (x1, y1, x2, y2, theta)
                             right_dist = dist
+                            right_dist_modifier = dist_with_modifier
                             right_theta = theta
-
 
             if left_bound == None and right_bound == None:
                 return [None, None]
@@ -166,9 +172,10 @@ class LaneDetector:
                 if left_bound != None:
                     # scale line if debug mode for better visual representation
                     if self.debug_mode:
+                        print "Left theta: ", np.rad2deg(left_theta)
                         left_bound = self._scale_line(left_bound[0], left_bound[1], left_bound[2], left_bound[3])
 
-                    left_lane = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), left_dist, left_theta]
+                    left_lane = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), left_dist_modifier, left_theta]
                 else:
                     # predicted
                     left_lane = []
@@ -181,8 +188,10 @@ class LaneDetector:
 
                 if right_bound != None:
                     if self.debug_mode:
+                        print "Right theta: ", np.rad2deg(right_theta)
                         right_bound = self._scale_line(right_bound[0], right_bound[1], right_bound[2], right_bound[3])
-                    right_lane = [int(right_bound[0]), int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), right_dist, right_theta]
+
+                    right_lane = [int(right_bound[0]), int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), right_dist_modifier, right_theta]
                 else:
                     # predicted right lane
                     right_lane = []
@@ -193,8 +202,8 @@ class LaneDetector:
                     right_lane.append(frame.shape[0]/2)
                     right_lane.append(np.pi/2)
 
-
-            #print "Lane fine time= \t", timeit.default_timer() - start_lane_find
+            if self.debug_mode:
+                print "Lane fine time= \t", timeit.default_timer() - start_lane_find
 
 
             return [left_lane, right_lane]
