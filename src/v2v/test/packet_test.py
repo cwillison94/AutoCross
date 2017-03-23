@@ -7,7 +7,7 @@ from transmit_thread import *
 
 import time
 import os,binascii 
-import numpy as np, scipy.stats as st
+import numpy as np#, scipy.stats as st
 
 packet_data = {}
 total_invalid_packets = 0
@@ -95,7 +95,7 @@ def _report():
 		max_index = interarrival_times.index(max_interarrival_time)
 		min_interarrival_time = min(interarrival_times)
 		interarrival_variance = np.var(interarrival_times)
-		ci = st.t.interval(0.9999, len(interarrival_times)-1, loc=np.mean(interarrival_times), scale=st.sem(interarrival_times))
+		#ci = st.t.interval(0.9999, len(interarrival_times)-1, loc=np.mean(interarrival_times), scale=st.sem(interarrival_times))
 
 		# print('first 5 interarrivals: ')
 		# r = min(len(interarrival_times), 5)
@@ -124,7 +124,7 @@ def _report():
 		print('min: ' + str(min_interarrival_time))
 		print('interarrival variance: ' + str(interarrival_variance))
 
-		print('\n99.99% confidence interval: ' + str(ci))
+		#print('\n99.99% confidence interval: ' + str(ci))
 		print('------------------------------------------\n')
 	print 'report done'
 # thread callbacks
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 	print('broadcast/receive started...')
 
 	t = time.time()
-	end = t + 5
+	end = t + 15
 
 	transmitter.start()
 	receiver.start()
