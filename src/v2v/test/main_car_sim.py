@@ -24,6 +24,9 @@ DIRECTION_STRINGS = {
 	WEST	: "WEST"
 }
 
+def mycallback(data):
+	print(str(data))
+
 def send_stopped_signal(module, direction):
 	module.set_stopped(direction)
 
@@ -58,39 +61,20 @@ def get_key_press(win):
 	       pass  
 
 
-def main(win):
+def main():
 
 	debug = True
-	v2v = V2VModule(debug)
+	v2v = V2VModule(mycallback, debug)
+	v2v.start()
 	direction = NORTH
 
-	#win.nodelay(True)
-
-	key=""
-	win.clear()                
-	win.addstr("Use the arrow Keys to set approach direction.\n")
-	win.addstr("Press Enter to send STOPPED signal.\n")
-	win.addstr("Press q to quit.\n")
+	print('listening')
 
 
 	while True:
-		win.addstr("Current approach direction: %s\n" % DIRECTION_STRINGS[direction])
-
-		# wait for enter key to send STOP signal using current direction or new one
-		direction = get_key_press(win) or direction
-		send_stopped_signal(v2v,direction)
-		win.addstr("Sent STOPPED signal from %s\n" % (DIRECTION_STRINGS[direction]))
-		win.addstr("Waiting for ready signal from V2V...\n")
-		ready = get_ready_signal(v2v)
-		while not ready:
-			ready = get_ready_signal(v2v)
-			time.sleep(0.1)
-		win.addstr("Received ready signal. Entering intersection.\n")
-		send_transit_signal(v2v)
-		time.sleep(TRANSIT_DURATION)
-		win.addstr("Cleared intersection.\n")
-		send_cleared_signal(v2v)
+		time.sleep(0.1)
 
 
 if __name__ == "__main__":
-	curses.wrapper(main)
+	#curses.wrapper(main)
+	main()
