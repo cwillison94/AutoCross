@@ -50,8 +50,10 @@ class V2VModule(Thread):
 	MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$')
 
 
-	def __init__(self, debug_mode=False):
+	def __init__(self, ready_callback, debug_mode=False):
 		super(V2VModule, self).__init__()
+
+		self.ready_callback = ready_callback
 
 		self.debug_mode = debug_mode
 
@@ -101,6 +103,7 @@ class V2VModule(Thread):
 				while not ( self.ready or len(self.vehicles.keys()) == 0 ):
 					time.sleep(0.1)
 				debug_print("ready flag set. broadcasting IN_TRANSIT signal.")
+				self.ready_callback()
 				# our turn to go. set TRANSIT signal
 				_set_transmitter_state(IN_TRANSIT)
 
@@ -154,9 +157,9 @@ class V2VModule(Thread):
 			self.vehicles[vehicle_id] = vehicle_data
 			self.vehicles[vehicle_id]["timestamp"] = time.time()
 
+		# TODO move to seperate function (like in MID, MIS)
 		#get the earliest arrival time
 		earliest_arrival = min([v["timestamp"] for v in self.vehicles]) 
-
 
 		# check if there is already a car in the intersection
 		transit_vehicle = None
