@@ -187,7 +187,7 @@ class V2VModule(Thread):
 			self.transmitter.set_enabled(False)
 		else:
 			# e.g:  ab12:1:3:777
-			message = str(DEVICE_ID) + ":" + str(self.state) + ":" + str(self.direction) + ":" str(DUMMY_SPEED)
+			message = str(DEVICE_ID) + ":" + str(state) + ":" + str(self.direction) + ":" str(DUMMY_SPEED)
 			self.transmitter.set_message(message)
 			self.transmitter.set_enabled(True)
 
