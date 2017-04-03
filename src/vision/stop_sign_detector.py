@@ -1,4 +1,5 @@
-from threading import Thread
+#from threading import Thread
+from multiprocessing import Process, Lock
 import Queue
 import cv2
 
@@ -10,31 +11,43 @@ class StopSignDetector:
         self.img_queue = Queue.Queue()
         self.stop_sign_detected = False
         self.normalized_distance = 100
+        self.lock = Lock()
 
     def start(self):
         # start the thread to read frames from the video stream
         self.running = True
-        Thread(target=self.update, args=()).start()
+        self.process = Process(target=self.update, args=())
+        self.process.daemon = True
+        self.process.start()
+
         return self
 
     def push_img(self, img):
+        self.lock.acquire()
         self.img_queue.put(img)
+        self.lock.release()
 
     def update(self):
         # keep looping infinitely until the thread is stopped
         while self.running:
-            while not self.img_queue.empty():
-                img = self.img_queue.get()
-                rects = self.get_stop_rects(img)
 
-                # for now we will only look at the first
-                if len(rects) > 0:
-                    self.stop_sign_detected = True
-                    x1, y1, x2, y2 = rects[0]
-                    self.normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
-                else:
-                    self.stop_sign_detected = False
-                    self.normalized_distance = 100
+            self.lock.acquire()
+
+            #while not self.img_queue.empty():
+            img = self.img_queue.get()
+            self.lock.release()
+            rects = self.get_stop_rects(img)
+
+            # for now we will only look at the first
+            if len(rects) > 0:
+                self.stop_sign_detected = True
+                x1, y1, x2, y2 = rects[0]
+                self.normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
+            else:
+                self.stop_sign_detected = False
+                self.normalized_distance = 100
+            
+            
 
     def get_stop_info(self):
         return (self.stop_sign_detected, self.normalized_distance)
@@ -57,6 +70,9 @@ class StopSignDetector:
             #rects[i][3] += img.shape[1]/2
         return rects
 
-    def stop(self):
+    def cleanup(self):
         # indicate that the thread should be stopped
-        self.running = False
+        self.img_queue.queue.clear()
+        self.running = False      
+        self.process.terminate()  
+

@@ -1,4 +1,4 @@
-BUFFER_PERIOD = 0.5 
+BUFFER_PERIOD = 2.0 
 # minimum wait time (must be at least 2x max transmission delay)
 # actual time will depend on processing delays. use a conservative value
 

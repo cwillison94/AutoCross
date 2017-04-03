@@ -2,48 +2,50 @@ import RPi.GPIO as GPIO
 import time
 GPIO.setmode(GPIO.BCM)
 
-FRONT_LEFT_SONAR_PINS = (16, 12) # CHANGE PIN 19 in use!! 
-LEFT_SONAR_PINS = (6, 5)
+FRONT_LEFT_SONAR_PINS = (6, 13) 
+FRONT_RIGHT_SONAR_PINS = (19, 26)
 
-FRONT_RIGHT_SONAR_PINS = (21, 20)
-RIGHT_SONAR_PINS = (24, 23)
+class Distance:
 
-TRIG, ECHO = FRONT_RIGHT_SONAR_PINS
+    def __init__(self, pins):
+        self.trigger, self.echo = pins
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+        
+        GPIO.setup(self.trigger, GPIO.OUT)
+        GPIO.output(self.trigger, 0)
+        GPIO.setup(self.echo, GPIO.IN)
 
-def setup():
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
-    
-    GPIO.setup(TRIG, GPIO.OUT)
-    GPIO.output(TRIG, 0)
-    GPIO.setup(ECHO, GPIO.IN)
+        self.max_round_trip_time = 0.01
 
-    #wait for initialization
-    #time.sleep(0.1)
+    def read_cm(self):
+        GPIO.output(self.trigger, 1)
+        time.sleep(0.00001)
+        GPIO.output(self.trigger, 0)
 
-def read_cm():
-    GPIO.output(TRIG, 1)
-    time.sleep(0.00001)
-    GPIO.output(TRIG, 0)
+        start = time.time()
+        while GPIO.input(self.echo) == 0 and time.time() - start < self.max_round_trip_time:
+            pass
+        
+        while GPIO.input(self.echo) == 1 and time.time() - start < self.max_round_trip_time:
+            pass
 
-    start = time.time()
-    while GPIO.input(ECHO) == 0 and time.time() - start < 0.01:
-        pass
-    
-    while GPIO.input(ECHO) == 1 and time.time() - start < 0.01:
-        pass
+        stop = time.time()
 
-    stop = time.time()
+        return (stop - start) * 17150
 
-    return (stop - start) * 17150
 
 def main():
-    setup()
+    
+    range_fl = Distance(FRONT_LEFT_SONAR_PINS)
+    range_fr = Distance(FRONT_RIGHT_SONAR_PINS)
 
     while True:
-        dist = read_cm()
+        dist_fl = range_fl.read_cm()
+        dist_fr = range_fr.read_cm()
 
-        print "Distance: " + str(dist) + " cm"
+        print "Distance fr: " + str(dist_fl) + " cm"
+        print "Distance fl: " + str(dist_fr) + " cm"
         
         #time.sleep(0.5)
 

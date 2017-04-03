@@ -2,7 +2,7 @@
 import pigpio
 import time
 
-DEFAULT_MOTOR_BCM_PIN = 19
+DEFAULT_MOTOR_BCM_PIN = 20
 
 #DIRECTION_LEFT = 1
 #DIRECTION_RIGHT = 2
@@ -16,39 +16,25 @@ PULSEWIDTH_RANGE = PULSEWIDTH_NEUTRAL - PULSEWIDTH_FULL
 
 class CarMotor():
 	def __init__(self, motor_bmc_pin = DEFAULT_MOTOR_BCM_PIN):
-		self.motor_bmc_pin = motor_bmc_pin
-		self.moving = False
-		
-		self.MIN_PERCENT = MIN_PERCENT
+		self.motor_bmc_pin = motor_bmc_pin		
 
 		self.pi = pigpio.pi()
 		self.set_percent_power(0)
 
 	def set_percent_power(self, percent):
 		if percent > 100:
-			self.moving = True
 			percent = 100
 		elif percent < MIN_PERCENT and not(percent == 0):
 			percent = MIN_PERCENT
-			self.moving = True
-		elif percent == 0:
-		    self.moving = False
 
 		self.pi.set_servo_pulsewidth(self.motor_bmc_pin, PULSEWIDTH_NEUTRAL - (percent/100.) * PULSEWIDTH_RANGE)
 
-	def stop_pwm(self):
-		#stop pwm on pin
-		self.moving = False
-		self.pi.set_servo_pulsewidth(self.motor_bmc_pin, 0)
-
 	def stop(self):
-		#stop pwm on pin
-		self.moving = False
 		self.set_percent_power(0)
 
 	def cleanup(self):
-		self.stop_pwm()
-		self.pi.stop()
+		self.stop()
+		#self.pi.stop()
 
 	def set_pulse_width(self, pulse_width):
 		self.pi.set_servo_pulsewidth(self.motor_bmc_pin, pulse_width)
@@ -79,9 +65,10 @@ if __name__ == "__main__":
 
 
 		except KeyboardInterrupt:
+			running = False
 			motor.cleanup()
 
-	motor.cleanup()
+	#motor.cleanup()
 	#steering.setPercentDirection(2, 100)
 
 

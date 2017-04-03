@@ -7,7 +7,7 @@ from transmit_thread import *
 
 import time
 import os,binascii 
-import numpy as np#, scipy.stats as st
+import numpy as np, scipy.stats as st
 
 packet_data = {}
 total_invalid_packets = 0
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 	print('broadcast/receive started...')
 
 	t = time.time()
-	end = t + 15
+	end = t + 5
 
 	transmitter.start()
 	receiver.start()
