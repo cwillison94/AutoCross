@@ -11,12 +11,9 @@ from constants import *
 import re
 
 
-
 # 4 digit unique id
 DEVICE_ID = binascii.b2a_hex(os.urandom(2)) 
 MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$')
-
-
 
 class V2VModule(Thread):
 
@@ -25,7 +22,6 @@ class V2VModule(Thread):
 		super(V2VModule, self).__init__()
 
 		self.ready_callback = ready_callback
-
 		self.debug_mode = debug_mode
 
 		# transmitter and receiver threads
@@ -68,8 +64,8 @@ class V2VModule(Thread):
 				self.debug_print("Stopped. Waiting for turn to transit.")
 				self._set_transmitter_state(STOPPED)
 
-				time.sleep(BUFFER_PERIOD) # minimum time we have to wait
-				self.debug_print("Minimum wait time (BUFFER_PERIOD = %.1f) elapsed." % (BUFFER_PERIOD))
+				time.sleep(MINIMUM_WAIT_PERIOD) # minimum time we have to wait
+				self.debug_print("Minimum wait time (MINIMUM_WAIT_PERIOD = %.1f) elapsed." % (MINIMUM_WAIT_PERIOD))
 
 				# wait for our turn in queue to go, either when its our turn or if there is no one else
 				while not ( self.ready or len(self.vehicles.keys()) == 0 ):
@@ -189,7 +185,7 @@ class V2VModule(Thread):
 			self.transmitter.set_enabled(False)
 		else:
 			# e.g:  ab12:1:3:777
-			message = str(DEVICE_ID) + ":" + str(self.state) + str(self.direction) + str(DUMMY_SPEED)
+			message = str(DEVICE_ID) + ":" + str(self.state) + ":" + str(self.direction) + ":" str(DUMMY_SPEED)
 			self.transmitter.set_message(message)
 			self.transmitter.set_enabled(True)
 
