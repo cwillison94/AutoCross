@@ -1,5 +1,6 @@
 import time
 import os,binascii 
+from uuid import getnode as get_mac
 
 from threading import Thread, Condition
 
@@ -11,8 +12,8 @@ from constants import *
 import re
 
 
-# 4 digit unique id
-DEVICE_ID = binascii.b2a_hex(os.urandom(2)) 
+# use last 4 hex digits of MAC address as unique car id
+DEVICE_ID = hex(get_mac())[-5:-1] 
 MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$')
 
 class V2VModule(Thread):
@@ -70,6 +71,7 @@ class V2VModule(Thread):
 				# wait for our turn in queue to go, either when its our turn or if there is no one else
 				while not ( self.ready or len(self.vehicles.keys()) == 0 ):
 					time.sleep(0.1)
+
 				self.debug_print("ready flag set. broadcasting IN_TRANSIT signal.")
 				self.ready_callback()
 				# our turn to go. set TRANSIT signal
@@ -197,7 +199,6 @@ class V2VModule(Thread):
 		self.ready = False
 		self.state = IDLE
 		self._set_transmitter_state(IDLE)
-
 
 	"""
 	public methods called by main vehicle controller 
