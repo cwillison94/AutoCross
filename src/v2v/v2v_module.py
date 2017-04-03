@@ -66,11 +66,8 @@ class V2VModule(Thread):
 			# transmit STOPPED signal and wait for our turn to transit
 			if self.state == STOPPED:
 				self.debug_print("Stopped. Waiting for turn to transit.")
-<<<<<<< HEAD
 				self._set_transmitter_state(STOPPED)
-=======
-				_set_transmitter_state(STOPPED)
->>>>>>> 855f340263dde9dd74f72307e8881930dcb95288
+
 				time.sleep(BUFFER_PERIOD) # minimum time we have to wait
 				self.debug_print("Minimum wait time (BUFFER_PERIOD = %.1f) elapsed." % (BUFFER_PERIOD))
 
@@ -164,11 +161,8 @@ class V2VModule(Thread):
 	def _on_message_received(self, msg):
 
 
-<<<<<<< HEAD
 		params = self._parse_message(str(msg))
-=======
-		params = self._parse_message(msg)
->>>>>>> 855f340263dde9dd74f72307e8881930dcb95288
+
 		if params:
 			vehicle_id = str(params[0])
 			vehicle_data = {
