@@ -1,78 +1,35 @@
-#from threading import Thread
-from multiprocessing import Process, Lock
-import Queue
 import cv2
 
 STOP_SIGN_HAAR = "stop_sign_haar.xml"
 
-class StopSignDetector:
-    def __init__(self, cascade_file_path = STOP_SIGN_HAAR):
-        self.cascade = stopSignCascade = cv2.CascadeClassifier(cascade_file_path)
-        self.img_queue = Queue.Queue()
-        self.stop_sign_detected = False
-        self.normalized_distance = 100
-        self.lock = Lock()
+_cascade = cv2.CascadeClassifier(STOP_SIGN_HAAR)
 
-    def start(self):
-        # start the thread to read frames from the video stream
-        self.running = True
-        self.process = Process(target=self.update, args=())
-        self.process.daemon = True
-        self.process.start()
+def detect_stop_sign(img):
+    global _cascade
+    img_roi = img[0:img.shape[1], img.shape[0]/2:img.shape[0]]
+    rects = _cascade.detectMultiScale(cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY), 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (25, 25))
 
-        return self
+    if len(rects) == 0:
+        return (False, 100, [])
 
-    def push_img(self, img):
-        self.lock.acquire()
-        self.img_queue.put(img)
-        self.lock.release()
+    rects[:, 2:] += rects[:, :2]
 
-    def update(self):
-        # keep looping infinitely until the thread is stopped
-        while self.running:
+    # shift back to original image
+    for i in range(len(rects)):
+        rects[i][0] += img.shape[0]/2
+        rects[i][2] += img.shape[0]/2
 
-            self.lock.acquire()
+        #rects[i][1] += img.shape[1]/2
+        #rects[i][3] += img.shape[1]/2
 
-            #while not self.img_queue.empty():
-            img = self.img_queue.get()
-            self.lock.release()
-            rects = self.get_stop_rects(img)
+    if len(rects) > 0:
+        stop_sign_detected = True
+        x1, y1, x2, y2 = rects[0]
+        normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
+    else:
+        stop_sign_detected = False
+        normalized_distance = 100
 
-            # for now we will only look at the first
-            if len(rects) > 0:
-                self.stop_sign_detected = True
-                x1, y1, x2, y2 = rects[0]
-                self.normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
-            else:
-                self.stop_sign_detected = False
-                self.normalized_distance = 100
-            
-            
+    return (stop_sign_detected, normalized_distance, (x1, y1, x2, y2))
 
-    def get_stop_info(self):
-        return (self.stop_sign_detected, self.normalized_distance)
-
-    def get_stop_rects(self, img):
-        img_roi = img[0:img.shape[1], img.shape[0]/2:img.shape[0]]
-        rects = self.cascade.detectMultiScale(cv2.cvtColor(img_roi, cv2.COLOR_BGR2GRAY), 1.1, 5, cv2.CASCADE_SCALE_IMAGE , (25, 25))
-
-        if len(rects) == 0:
-            return []
-
-        rects[:, 2:] += rects[:, :2]
-
-        # shift back to original image
-        for i in range(len(rects)):
-            rects[i][0] += img.shape[0]/2
-            rects[i][2] += img.shape[0]/2
-
-            #rects[i][1] += img.shape[1]/2
-            #rects[i][3] += img.shape[1]/2
-        return rects
-
-    def cleanup(self):
-        # indicate that the thread should be stopped
-        self.img_queue.queue.clear()
-        self.running = False      
-        self.process.terminate()  
 
