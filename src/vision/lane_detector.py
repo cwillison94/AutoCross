@@ -28,7 +28,7 @@ LANE_WIDTH_PX = 360
 
 
 class LaneDetector:
-    def __init__(self, road_horizon, width, height, base_dist_height_mod = BASE_DISTANCE_HEIGHT_MODIFIER, prob_hough= True, debug_mode = False):
+    def __init__(self, road_horizon, width, height, enable_stop_line_detection = False,  base_dist_height_mod = BASE_DISTANCE_HEIGHT_MODIFIER, prob_hough= True, debug_mode = False):
         self.prob_hough = prob_hough
         self.road_horizon = road_horizon
 
@@ -43,7 +43,7 @@ class LaneDetector:
         # only look for lanes in this region
         #self.lane_roi = 0.85 * self.height
 
-        self.lane_roi = 0.60 * self.height
+        self.lane_roi = 0.90 * self.height
 
         self.lane_find_upper_bound = 0.9 * self.height #0.8
         
@@ -60,8 +60,7 @@ class LaneDetector:
         self.mid_x = self.width / 2
 
         self.debug_mode = debug_mode
-
-
+        self.enable_stop_line_detection = enable_stop_line_detection
 
     def _standard_hough(self, img, init_vote):
         # Hough transform wrapper to return a list of points like PHough does
@@ -135,6 +134,47 @@ class LaneDetector:
             y1 = self.height
         return int(x1), int(y1), int(x2), int(y2)
 
+    def _get_line_intersection(self, line1, line2):
+
+        if line1 is None or line2 is None:
+            return (None, None)
+        l1_x1, l1_y1, l1_x2, l1_y2 = line1  
+        l2_x1, l2_y1, l2_x2, l2_y2 = line2 
+
+        # Edge cases
+        if l1_x2 == l1_x1 and l2_x2 == l2_x1:
+            return (None, None)
+        elif l1_x2 == l1_x1:
+            m_1 = (l2_y2 - l2_y1) / (l2_x2 - l2_x1)
+            b_1 = l2_y1 - m_1 * l2_x1
+            x_int = l1_x2
+            y_int = m_1 * x_int + b_1
+            return (x_int, y_int)
+        elif l2_x2 == l2_x1:
+            m_0 = (l1_y2 - l1_y1) / (l1_x2 - l1_x1)
+            b_0 = l1_y1 - m_0 * l1_x1
+            x_int = l2_x1
+            y_int = m_0 * x_int + b_0
+            return (x_int, y_int)
+        else:
+            m_0 = (l1_y2 - l1_y1) / (l1_x2 - l1_x1)
+            b_0 = l1_y1 - m_0 * l1_x1
+
+            m_1 = (l2_y2 - l2_y1) / (l2_x2 - l2_x1)
+            b_1 = l2_y1 - m_1 * l2_x1
+
+            if m_0 == m_1:
+                return (None, None)
+
+            x_int = (b_1 - b_0) / (m_0 - m_1)
+
+            y_int = m_0 * x_int + b_0
+
+            return (x_int, y_int)
+
+    def _between(self, value, lower, upper):
+        return value >= lower and value <= upper
+
     def detect(self, frame):
         lane_detect_start = time.time()        
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -156,6 +196,9 @@ class LaneDetector:
         right_dist_modifier = None
 
         stop_line = None
+        stop_line_angle = None
+
+        potential_stop_lines = []
 
 
         if self.prob_hough:
@@ -181,38 +224,57 @@ class LaneDetector:
                         dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
 
                         if left_bound is None and dist < 0 and x1 < self.mid_x and x2 < self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound):# and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound) : # and dist > -1* 1.2 * self.mid_x
-                            left_bound = (x1, y1, x2, y2, theta)
+                            left_bound = (x1, y1, x2, y2)
                             left_dist = dist
                             left_dist_modifier = dist_with_modifier
                             left_theta = theta_deg_abs
                         elif right_bound is None and dist > 0 and x1 > self.mid_x and x2 > self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound):# and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): #and dist < 1.2 * self.mid_x
-                            right_bound = (x1, y1, x2, y2, theta)
+                            right_bound = (x1, y1, x2, y2)
                             right_dist = dist
                             right_dist_modifier = dist_with_modifier
                             right_theta = theta_deg_abs
                         elif left_bound is not None and 0 > dist > left_dist  and x1 < self.mid_x and x2 < self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound): # and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): # and dist > -1* 1.2 * self.mid_x
-                            left_bound = (x1, y1, x2, y2, theta)
+                            left_bound = (x1, y1, x2, y2)
                             left_dist = dist
                             left_dist_modifier = dist_with_modifier
                             left_theta = theta_deg_abs
                         elif right_bound is not None and 0 < dist < right_dist and x1 > self.mid_x and x2 > self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound): # and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): # and dist < 1.2 * self.mid_x
-                            right_bound = (x1, y1, x2, y2, theta)
+                            right_bound = (x1, y1, x2, y2)
                             right_dist = dist
                             right_dist_modifier = dist_with_modifier
                             right_theta = theta_deg_abs
                     elif theta_abs < 30:
                         
-                        # should find longest line
-                        stop_line_length = self.line_length(x1, y1, x2, y2)
-                        if  stop_line_length > 100:
-                            print "Horizontal line, Length=" + str(stop_line_length) + " deg=" + str(theta_deg_abs)
-                            stop_line = [int(x1), int(y1), int(x2), int(y2)]
+                        if self.enable_stop_line_detection:
+                            # Potential stop lines
+                            if x2 != x1:
+                                m = (y2 - y1) / float((x2 - x1))
+                                length = self.line_length(x1, y1, x2, y2) 
+                                # print "m = " + str(m)
+                                if length > 30:
+                                    potential_stop_lines.append([x1, y1, x2, y2, theta_deg_abs, length])                         
 
             # we only want to approximate at max 1 lane so if both are not found we don't approximate
             if left_bound is None and right_bound is None:
                 self.prev_left_lane = None
                 self.prev_right_lane = None
-                return [None, None, stop_line]
+                return [None, None, None]
+            elif self.enable_stop_line_detection:
+                # Check for stop line
+                for x1, y1, x2, y2, theta_abs, length in potential_stop_lines:
+                    x1_int, y1_int = self._get_line_intersection(left_bound, (x1, y1, x2, y2))
+                    x2_int, y2_int = self._get_line_intersection(right_bound, (x1, y1, x2, y2))
+
+                    # print "LEFT: x_int: " + str(x1_int) + " y_int: " + str(y1_int) 
+                    # print "RIGHT: x_int: " + str(x2_int) + " y_int: " + str(y2_int) 
+
+                    # If the intersects are within the frame region
+
+                    if (x1_int is not None and y1_int is not None and x2_int is not None and y2_int is not None 
+                        and self._between(x1_int - self.mid_x, left_dist_modifier, right_dist_modifier) and self._between(x2_int - self.mid_x, left_dist_modifier, right_dist_modifier) 
+                        and self._between(y1_int, 0,300) and self._between(y1_int, 0, 300)):
+                        # print "Stop Line Found angle: " + str(theta_abs) + " len=" + str(length)
+                        stop_line = [int(x1), int(y1), int(x2), int(y2)]
 
             if left_bound is not None:
                 # scale line if debug mode for better visual representation
@@ -275,13 +337,6 @@ class LaneDetector:
                 left_lane.append(frame.shape[1])
                 left_lane.append(-1 * self.approx_base_dist)
                 left_lane.append(self.prev_left_lane[5])
-
-
-        if left_theta is not None:
-            print "Left Theta, ", left_theta
-
-        if right_theta is not None:
-            print "Right Theta, ", right_theta
 
         self.prev_left_lane = left_lane
         self.prev_right_lane = right_lane

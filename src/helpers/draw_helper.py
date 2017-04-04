@@ -13,12 +13,26 @@ def draw_text(img, message, location = (50, 50)):
 
     return img
 
-def draw_lanes(img, left_lane, right_lane, steering_output):
+def draw_lanes(img, left_lane, right_lane):
     global display_on
     if display_on and left_lane is not None and right_lane is not None:
-        draw_text(img, "steering %.1f " % steering_output, (50, 300))
+        # draw_text(img, "steering %.1f " % steering_output, (50, 300))
         cv2.line(img, (left_lane[0], left_lane[1]), (left_lane[2], left_lane[3]), (0, 0, 255), 5)
         cv2.line(img, (right_lane[0], right_lane[1]), (right_lane[2], right_lane[3]), (0, 0, 255), 5)
+
+    return img
+
+def draw_rectangle(img, rect):
+    global display_on
+    if display_on and len(rect) == 4:
+        cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (255, 255, 0), 5)
+
+    return img
+
+def draw_steering_output(img, steering_output):
+    global display_on
+    if display_on:
+        draw_text(img, "steering %.1f " % steering_output, (50, 300))
 
     return img
 
