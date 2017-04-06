@@ -9,9 +9,9 @@ import logging
 import time
 
 
-CONTROLLER_K_P = 0.5
+CONTROLLER_K_P = 0.8
 CONTROLLER_K_I = 0
-CONTROLLER_K_D = 0.2
+CONTROLLER_K_D = 0.35
 
 MAX_POWER = 18
 
@@ -31,6 +31,9 @@ class SpeedController:
 
         # speed in m/s
         self.desired_speed = 0
+        self.current_speed = 0
+        self._average_speed = 0
+        self._speeds = []
         self.speed_encoder = SpeedEncoder()
         self.speed_encoder.start()
 
@@ -66,7 +69,11 @@ class SpeedController:
 
     def slowdown(self):
         self.power_output *= 1
-        self.car_motor.set_percent_power(self.power_output)    
+        self.car_motor.set_percent_power(self.power_output) 
+
+
+    def get_speed(self):
+        return self.speed_encoder.get_speed_m_s()
 
     def maintain_speed_PID(self):
 
@@ -77,15 +84,15 @@ class SpeedController:
                 self.car_motor.set_percent_power(0)
             else:
 
-                current_speed = self.speed_encoder.get_speed_m_s()
+                self.current_speed = self.speed_encoder.get_speed_m_s()
 
-                print("CURRENT SPEED (m/s): " + str(current_speed))
+                print("CURRENT SPEED (m/s): " + str(self.current_speed))
 
                 self.ticks = cv2.getTickCount()
                 self.dt = (self.ticks - self.prev_ticks) / cv2.getTickFrequency()
 
 
-                self.car_speed_error = self.desired_speed - current_speed
+                self.car_speed_error = self.desired_speed - self.current_speed
                 self.integral = self.integral + self.car_speed_error * self.dt
                 self.derivative = (self.car_speed_error - self.prev_car_speed_error)/self.dt
 
@@ -95,13 +102,15 @@ class SpeedController:
                 self.prev_car_speed_error = self.car_speed_error
                 self.prev_ticks = self.ticks
 
-                print("POWER_OUPUT: " + str(self.power_output))
+                
 
                 # clamp power
                 if self.power_output > self.max_power:
                     self.power_output = self.max_power
                 elif self.power_output < 10:
                     self.power_output = 10
+
+                print("POWER_OUPUT: " + str(self.power_output))
 
                 self.car_motor.set_percent_power(self.power_output)
 
@@ -122,10 +131,12 @@ if __name__=="__main__":
     speed_controller.start()
 
     try:
-
+        speed = input("Speed (m/s): ")
+        speed_controller.set_speed(speed)
         while True:
-            speed = input("Speed (m/s): ")
-            speed_controller.set_speed(speed)
+
+            print("Average speed: ", str(speed_controller.get_speed()))
+            time.sleep(1)
     except:
         speed_controller.cleanup()
     

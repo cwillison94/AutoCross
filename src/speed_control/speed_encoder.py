@@ -24,7 +24,9 @@ class SpeedEncoder:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.IN)
         self.running = False
-        self.update_rate =  1#0.5 seconds
+        self.update_rate =  0.6#0.5 seconds
+
+        self._speeds = []
 
 
     def start(self):
@@ -44,20 +46,31 @@ class SpeedEncoder:
     def update(self):
         while self.running:
             if (time.time() - self.time_old > self.update_rate):
-                self.rpm = self.rpm_counter * 30 * self.update_rate
+                # self.rpm =
+                self.rpm = (self.rpm + self.rpm_counter * 30 * self.update_rate)/2.
 
                 self.rpm_counter = 0
                 self.time_old = time.time()
-            time.sleep(0.01) # sleep for 100 ms
+            # time.sleep(0.01) # sleep for 10 ms
 
     def get_rpm(self):
         return self.rpm
 
-    def get_speed_cm_s(self):
-        return self.rpm * WHEEL_CIRCUMFERENCE / 60
-
     def get_speed_m_s(self):
         return self.rpm * WHEEL_CIRCUMFERENCE / 6000
+
+    def _add_to_average_speed(self, speed):
+        if len(self._speeds) < 5:
+            self._speeds.append(speed)
+        else:
+            self._speeds.pop(0)
+            self._speeds.append(speed)
+
+        # print "SPeed len: ", len(self._speeds)
+
+        if len(self._speeds) > 0:
+            self._average_speed = sum(self._speeds) / len(self._speeds)
+
 
     def stop(self):
         self.running = False

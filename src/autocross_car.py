@@ -59,7 +59,7 @@ class AutoCrossCar:
         self.derivative = 0
 
         # speed in m/s
-        self.car_speed = 0.2#0.8#1.0
+        self.car_desired_speed = 0.2#0.8#1.0
 
         # TODO: REMOVE THIS AFTER TESTING
         # self.car_power = 15
@@ -262,7 +262,7 @@ class AutoCrossCar:
                         #     right_lane = intersection_right_lane
 
                         # self.car_motor.set_percent_power(self.car_power)
-                        speed_controller.set_speed(self.car_speed)
+                        speed_controller.set_speed(self.car_desired_speed)
 
                         steering_output = self._steering_PID(left_lane, right_lane)
                         steering.set_percent_direction(steering_output)
@@ -290,11 +290,10 @@ class AutoCrossCar:
                         speed_controller.stop()                    
                         self.v2v_module.set_stopped(0)
                         intersection_left_lane = left_lane
-                        #right lane might be scewed by stop sign
                         intersection_right_lane = right_lane
                     else: 
                         logging.info("SLOWING DOWN")
-                        speed_controller.slowdown()
+                        # speed_controller.slowdown()
                 else:
 
                     self.state = DETECT_LANES
@@ -325,7 +324,7 @@ class AutoCrossCar:
                     elif left_lane is not None and right_lane is not None:
                         self.state = DETECT_LANES
                         ##motor.set_percent_power(self.car_power)
-                        speed_controller.set_speed(self.car_speed)
+                        speed_controller.set_speed(self.car_desired_speed)
                         # self.car_motor.set_percent_power(self.car_power)
                         steering_output = self._steering_PID(left_lane, right_lane)
                         steering.set_percent_direction(steering_output)
