@@ -54,7 +54,8 @@ class AutoCrossCar:
         self.derivative = 0
 
         # speed in m/s
-        self.car_speed = 0.8#1.0
+        self.car_speed = 1#0.8#1.0
+
         # TODO: REMOVE THIS AFTER TESTING
         self.car_power = 15
 
@@ -96,13 +97,13 @@ class AutoCrossCar:
         base_right = self._lane_base_distance(right_lane)
 
         slope_adjustment = 0
-        print "right_lane, ", right_lane
+        #print "right_lane, ", right_lane
         if self._lane_is_approximated(right_lane) and left_lane[0] != left_lane[2]:
             
             slope_adjustment = -1 * (left_lane[3] - left_lane[1])/float(left_lane[2] - left_lane[0])
             logging.debug("SLOPE ADJUSTMENT = " + str(slope_adjustment))
 
-        self.car_error = (base_left + base_right + slope_adjustment * 10)/2
+        self.car_error = (base_left + base_right)/2
         self.integral = self.integral + self.car_error * self.dt
         self.derivative = (self.car_error - self.prev_car_error)/self.dt
 
@@ -155,7 +156,7 @@ class AutoCrossCar:
         self.car_motor.set_percent_power(0)
 
     def _stop_sign_detected_callback(self, stop_sign_info):
-        print "stop_sign_info= ", stop_sign_info
+        #print "stop_sign_info= ", stop_sign_info
         self.stop_detected_info = stop_sign_info
 
     def start_auto(self):
@@ -266,7 +267,6 @@ class AutoCrossCar:
                     speed_controller.set_speed(0.8)
                     steering_output = self._steering_PID(left_lane, right_lane)
                     steering.set_percent_direction(steering_output)
-
                 else:
 
                     self.state = DETECT_LANES
@@ -277,7 +277,7 @@ class AutoCrossCar:
                     # left_lane = lanes[0]
                     # right_lane = lanes[1]
                     # stop_line = lanes[2]
-                    steering_output = 0
+                    # steering_output = 0
 
                     if stop_line is not None:
                         logging.info("Stop line detected. Stopping")                    
@@ -302,7 +302,7 @@ class AutoCrossCar:
                         steering_output = self._steering_PID(left_lane, right_lane)
                         steering.set_percent_direction(steering_output)
 
-                    img = helpers.draw_helper.draw_steering_output(img, steering_output)
+                        img = helpers.draw_helper.draw_steering_output(img, steering_output)
                     # img = helpers.draw_helper.draw_lanes(img, left_lane, right_lane, steering_output)
                     # img = helpers.draw_helper.draw_line(img, stop_line)
                 
@@ -333,7 +333,7 @@ class AutoCrossCar:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG)#DEBUG
     #logging.propagate = False
     car = AutoCrossCar(with_display = True)
 

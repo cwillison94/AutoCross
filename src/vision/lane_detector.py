@@ -22,7 +22,7 @@ ROI_THETA = 0.3
 
 # Default percent of height to calculate base distance.
 #     Recommended from 0.8 to 1
-BASE_DISTANCE_HEIGHT_MODIFIER = 0.85
+BASE_DISTANCE_HEIGHT_MODIFIER = 0.85#0.85
 
 LANE_WIDTH_PX = 360
 
@@ -31,7 +31,6 @@ class LaneDetector:
     def __init__(self, road_horizon, width, height, enable_stop_line_detection = False,  base_dist_height_mod = BASE_DISTANCE_HEIGHT_MODIFIER, prob_hough= True, debug_mode = False):
         self.prob_hough = prob_hough
         self.road_horizon = road_horizon
-
         #frame width and height
         self.width = width
         self.height = height
@@ -46,8 +45,6 @@ class LaneDetector:
         self.lane_roi = 0.90 * self.height
 
         self.lane_find_upper_bound = 0.9 * self.height #0.8
-        
-
         self.approx_base_dist = int(1 * self.width / 2)
 
         
@@ -316,27 +313,27 @@ class LaneDetector:
         
         # Lanes to close correction
 
-        if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
-            print "Lanes are too close, attempting to correct"
-            # raise Exception("Tests")
-            if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
-                print "Correcting right lane"
-                right_lane = []
-                right_lane.append(frame.shape[0])
-                right_lane.append(0)
-                right_lane.append(frame.shape[0])
-                right_lane.append(frame.shape[1])
-                right_lane.append(self.approx_base_dist)
-                right_lane.append(self.prev_right_lane[5])
-            elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
-                print "Correcting left lane"
-                left_lane = []
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(frame.shape[1])
-                left_lane.append(-1 * self.approx_base_dist)
-                left_lane.append(self.prev_left_lane[5])
+        # if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
+        #     print "Lanes are too close, attempting to correct"
+        #     # raise Exception("Tests")
+        #     if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
+        #         print "Correcting right lane"
+        #         right_lane = []
+        #         right_lane.append(frame.shape[0])
+        #         right_lane.append(0)
+        #         right_lane.append(frame.shape[0])
+        #         right_lane.append(frame.shape[1])
+        #         right_lane.append(self.approx_base_dist)
+        #         right_lane.append(self.prev_right_lane[5])
+        #     elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
+        #         print "Correcting left lane"
+        #         left_lane = []
+        #         left_lane.append(0)
+        #         left_lane.append(0)
+        #         left_lane.append(0)
+        #         left_lane.append(frame.shape[1])
+        #         left_lane.append(-1 * self.approx_base_dist)
+        #         left_lane.append(self.prev_left_lane[5])
 
         self.prev_left_lane = left_lane
         self.prev_right_lane = right_lane
