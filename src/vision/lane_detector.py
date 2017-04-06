@@ -10,7 +10,7 @@ import math
 #HOUGH_MIN_LINE_LENGTH = 5
 #HOUGH_MAX_LINE_GAP = 30
 
-HOUGH_MIN_LINE_LENGTH = 10
+HOUGH_MIN_LINE_LENGTH = 15
 HOUGH_MAX_LINE_GAP = 50
 
 HOUGH_THRESHOLD_VOTES = 10
@@ -42,7 +42,7 @@ class LaneDetector:
         # only look for lanes in this region
         #self.lane_roi = 0.85 * self.height
 
-        self.lane_roi = 0.90 * self.height
+        self.lane_roi = 0.85 * self.height
 
         self.lane_find_upper_bound = 0.9 * self.height #0.8
         self.approx_base_dist = int(1 * self.width / 2)
@@ -219,6 +219,7 @@ class LaneDetector:
                     #if theta_abs > ROI_THETA:  # ignore lines with a small angle WRT horizon
                     if theta_deg_abs > 35:
                         dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
+                        # dist = dist * 1.2
 
                         if left_bound is None and dist < 0 and x1 < self.mid_x and x2 < self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound):# and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound) : # and dist > -1* 1.2 * self.mid_x
                             left_bound = (x1, y1, x2, y2)
@@ -273,67 +274,107 @@ class LaneDetector:
                         # print "Stop Line Found angle: " + str(theta_abs) + " len=" + str(length)
                         stop_line = [int(x1), int(y1), int(x2), int(y2)]
 
-            if left_bound is not None:
-                # scale line if debug mode for better visual representation
+            # determine if non-approximated lane is left or right
+            if left_bound is None or right_bound is None:
+                # Find the line that is not none
+                if left_bound is not None:
+                    line = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3])]
+                else:
+                    line = [int(right_bound[0]), int(right_bound[1]), int(right_bound[2]), int(right_bound[3])]
+
+                x1 = line[0]
+                y1 = line[1]
+                x2 = line[2]
+                y2 = line[3]
+
+                dist_mod, _ = self._base_distance(x1, y1, x2, y2) 
+
+                theta = np.abs(np.rad2deg(np.arctan2(y2-y1, x2-x1)))
+                print('theta of unapproximated lane: ', theta)
+
+                slope = 100
+                if x2 != x1:
+                    slope = -1 * (y2 - y1)/float(x2 - x1)
+
+                print "SLope = ", slope
+
+                # left lane
+                if slope >= 0:
+                    print('detected lane should be left')
+                    # scale line if debug mode for better visual representation
+                    if self.debug_mode:
+                        #logging.debug("Left theta: ", np.rad2deg(left_theta))
+                        left_bound = self._scale_line(x1, y1, x2, y2)
+
+                    left_lane = [int(line[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), dist_mod, False]
+
+                    right_lane = []
+                    right_lane.append(frame.shape[0])
+                    right_lane.append(0)
+                    right_lane.append(frame.shape[0])
+                    right_lane.append(frame.shape[1])
+                    right_lane.append(self.approx_base_dist)
+                    # True for approximated
+                    right_lane.append(True)
+                    print('right bound approximated')
+
+                # right lane
+                else:
+                    print('detected lane should be right')
+                    if self.debug_mode:
+                        #logging.debug("Left theta: ", np.rad2deg(left_theta))
+                        right_bound = self._scale_line(x1, y1, x2, y2)
+
+                    right_lane = [int(right_bound[0]),int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), dist_mod, False]
+
+                    # predicted left lane
+                    left_lane = []
+                    left_lane.append(0)
+                    left_lane.append(0)
+                    left_lane.append(0)
+                    left_lane.append(frame.shape[1])
+                    left_lane.append(-1 * self.approx_base_dist)
+                    #True for approximated
+                    left_lane.append(True)
+                    print('left bound approximated')
+
+            else:
+
                 if self.debug_mode:
                     #logging.debug("Left theta: ", np.rad2deg(left_theta))
                     left_bound = self._scale_line(left_bound[0], left_bound[1], left_bound[2], left_bound[3])
 
                 left_lane = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), left_dist_modifier, False]
-            else:
-                # predicted left lane
-                left_lane = []
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(frame.shape[1])
-                left_lane.append(-1 * self.approx_base_dist)
-                #True for approximated
-                left_lane.append(True)
-
-            if right_bound is not None:
+            
                 if self.debug_mode:
                     #logging.debug("Right theta: ", np.rad2deg(right_theta))
                     right_bound = self._scale_line(right_bound[0], right_bound[1], right_bound[2], right_bound[3])
 
                 right_lane = [int(right_bound[0]), int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), right_dist_modifier, False]
-            else:
-                # predicted right lane
+
+         # Lanes to close correction
+
+        if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
+            print "Lanes are too close, attempting to correct"
+            # raise Exception("Tests")
+            if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
+                print "Correcting right lane"
                 right_lane = []
                 right_lane.append(frame.shape[0])
                 right_lane.append(0)
                 right_lane.append(frame.shape[0])
                 right_lane.append(frame.shape[1])
                 right_lane.append(self.approx_base_dist)
-                # True for approximated
-                right_lane.append(True)
-
-        #print "Lane Detect Time (ms): " + str((time.time() - lane_detect_start) * 1000)
-
-        
-        # Lanes to close correction
-
-        # if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
-        #     print "Lanes are too close, attempting to correct"
-        #     # raise Exception("Tests")
-        #     if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
-        #         print "Correcting right lane"
-        #         right_lane = []
-        #         right_lane.append(frame.shape[0])
-        #         right_lane.append(0)
-        #         right_lane.append(frame.shape[0])
-        #         right_lane.append(frame.shape[1])
-        #         right_lane.append(self.approx_base_dist)
-        #         right_lane.append(self.prev_right_lane[5])
-        #     elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
-        #         print "Correcting left lane"
-        #         left_lane = []
-        #         left_lane.append(0)
-        #         left_lane.append(0)
-        #         left_lane.append(0)
-        #         left_lane.append(frame.shape[1])
-        #         left_lane.append(-1 * self.approx_base_dist)
-        #         left_lane.append(self.prev_left_lane[5])
+                right_lane.append(self.prev_right_lane[5])
+            elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
+                print "Correcting left lane"
+                left_lane = []
+                left_lane.append(0)
+                left_lane.append(0)
+                left_lane.append(0)
+                left_lane.append(frame.shape[1])
+                left_lane.append(-1 * self.approx_base_dist)
+                left_lane.append(self.prev_left_lane[5])
 
         self.prev_left_lane = left_lane
         self.prev_right_lane = right_lane

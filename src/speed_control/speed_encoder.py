@@ -48,7 +48,7 @@ class SpeedEncoder:
 
                 self.rpm_counter = 0
                 self.time_old = time.time()
-            time.sleep(0.1) # sleep for 100 ms
+            time.sleep(0.01) # sleep for 100 ms
 
     def get_rpm(self):
         return self.rpm

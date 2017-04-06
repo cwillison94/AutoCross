@@ -1,15 +1,19 @@
 
+import sys
+sys.path.insert(0, "../")
 from speed_control.speed_encoder import SpeedEncoder
 from car_control.car_motor import CarMotor
+from threading import Thread
 import cv2
 import logging
+import time
 
 
-CONTROLLER_K_P = 5.0
+CONTROLLER_K_P = 0.5
 CONTROLLER_K_I = 0
 CONTROLLER_K_D = 0.2
 
-MAX_POWER = 15
+MAX_POWER = 18
 
 logger = logging.getLogger(__name__)
 logger.info("Speed Controller Imported")
@@ -32,59 +36,96 @@ class SpeedController:
 
         self.max_power = max_power
         self.car_motor = CarMotor()
+        self.running = False
 
         self.power_output = 0
 
+    def start(self):
+        self.thread = Thread(target=self.maintain_speed_PID, args=())
+        self.thread.daemon = True
+        self.running = True
+        self.thread.start()
+        
     def stop(self):
         print "STOPPING CAR MOTOR"
-        self.car_motor.set_percent_power(0)
+        self.power_output = 0
+        self.car_motor.set_percent_power(self.power_output)
         self.desired_speed = 0
 
     def set_speed(self, speed_m_s):
         self.desired_speed = speed_m_s
 
+    def set_power_percent(self, power_percent):
+        power = power_percent * self.max_power
+        if power_percent * self.max_power > self.max_power:
+            self.power_output = self.max_power
+        else:
+            self.power_output = power
+
+        self.car_motor.set_percent_power(self.power_output)
+
+    def slowdown(self):
+        self.power_output *= 1
+        self.car_motor.set_percent_power(self.power_output)    
+
     def maintain_speed_PID(self):
 
-        if self.desired_speed == 0:
-            self.power_output = 0
-            self.car_motor.set_percent_power(0)
-            return 
-        else:
+        while self.running:
 
-            current_speed = self.speed_encoder.get_speed_m_s()
-            # logger.debug("Current Speed (m/s): " + str(current_speed))
+            if self.desired_speed == 0:
+                self.power_output = 0
+                self.car_motor.set_percent_power(0)
+            else:
 
-            self.ticks = cv2.getTickCount()
-            self.dt = (self.ticks - self.prev_ticks) / cv2.getTickFrequency()
+                current_speed = self.speed_encoder.get_speed_m_s()
 
-            # logger.debug("dt " + str(self.dt))
+                print("CURRENT SPEED (m/s): " + str(current_speed))
 
-            self.car_speed_error = self.desired_speed - current_speed
-            self.integral = self.integral + self.car_speed_error * self.dt
-            self.derivative = (self.car_speed_error - self.prev_car_speed_error)/self.dt
+                self.ticks = cv2.getTickCount()
+                self.dt = (self.ticks - self.prev_ticks) / cv2.getTickFrequency()
 
-            power_output_adjustment = CONTROLLER_K_P * self.car_speed_error + CONTROLLER_K_I * self.integral + CONTROLLER_K_D * self.derivative
 
-            # logger.debug("Power output adjustment " + str(power_output_adjustment))
+                self.car_speed_error = self.desired_speed - current_speed
+                self.integral = self.integral + self.car_speed_error * self.dt
+                self.derivative = (self.car_speed_error - self.prev_car_speed_error)/self.dt
 
-            self.power_output = self.power_output + power_output_adjustment
-            self.prev_car_speed_error = self.car_speed_error
-            self.prev_ticks = self.ticks
+                power_output_adjustment = CONTROLLER_K_P * self.car_speed_error + CONTROLLER_K_I * self.integral + CONTROLLER_K_D * self.derivative
 
-            # logger.debug("power_output: " + str(self.power_output))
+                self.power_output = self.power_output + power_output_adjustment
+                self.prev_car_speed_error = self.car_speed_error
+                self.prev_ticks = self.ticks
 
-            # clamp power
-            if self.power_output > self.max_power:
-                self.power_output = self.max_power
+                print("POWER_OUPUT: " + str(self.power_output))
 
-        # set power output here
-            self.car_motor.set_percent_power(13)
-            #self.car_motor.set_percent_power(self.power_output)
-        
-            return 
+                # clamp power
+                if self.power_output > self.max_power:
+                    self.power_output = self.max_power
+                elif self.power_output < 10:
+                    self.power_output = 10
+
+                self.car_motor.set_percent_power(self.power_output)
+
+            time.sleep(0.1)
+
         
 
     def cleanup(self):
-        self.car_motor.set_percent_power(0)
         self.stop()
         self.speed_encoder.stop()
+
+
+if __name__=="__main__":
+    logger = logging.getLogger(__name__)
+    
+    logger.info("Speed Controller Imported")
+    speed_controller = SpeedController()
+    speed_controller.start()
+
+    try:
+
+        while True:
+            speed = input("Speed (m/s): ")
+            speed_controller.set_speed(speed)
+    except:
+        speed_controller.cleanup()
+    
