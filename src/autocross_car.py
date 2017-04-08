@@ -19,12 +19,17 @@ from distance.distance import Distance, FRONT_LEFT_SONAR_PINS, FRONT_RIGHT_SONAR
 from v2v.v2v_module import V2VModule
 from speed_control.speed_controller import SpeedController
 from speed_control.speed_encoder import SpeedEncoder
+from helpers.PID import PID
 
 DEFAULT_CAMERA_PARAMS = (608, 608, 32)
 
-CONTROLLER_K_P = 0.61
-CONTROLLER_K_I = 0
-CONTROLLER_K_D = 0.19
+STEERING_K_P = 0.61
+STEERING_K_I = 0
+STEERING_K_D = 0.19
+
+STOPPING_K_P = 0.2
+STOPPING_K_I = 0.0
+STOPPING_K_D = 0.1
 
 # States
 IDLE = 0
@@ -103,25 +108,28 @@ class AutoCrossCar:
         base_left = self._lane_base_distance(left_lane)
         base_right = self._lane_base_distance(right_lane)
 
-        slope_adjustment = 0
-        #print "right_lane, ", right_lane
-        # if not self._lane_is_approximated(left_lane) and  not self._lane_is_approximated(right_lane) and left_lane[2] != left_lane[0] and right_lane[2] != right_lane[0]:
-            
-            
-        #     slope_left = -1 * (left_lane[3] - left_lane[1])/float(left_lane[2] - left_lane[0])
-        #     slope_right = -1 * (right_lane[3] - right_lane[1])/float(right_lane[2] - right_lane[0])
-
-        #     slope_adjustment = 1/ ((slope_left + slope_right)/2.)
-        #     logging.debug("SLOPE ADJUSTMENT = " + str(slope_adjustment))
-
-        self.car_error = (base_left + base_right + slope_adjustment)/2
+        self.car_error = (base_left + base_right)/2.
         self.integral = self.integral + self.car_error * self.dt
         self.derivative = (self.car_error - self.prev_car_error)/self.dt
 
-        output = CONTROLLER_K_P * self.car_error + CONTROLLER_K_I * self.integral + CONTROLLER_K_D * self.derivative
+        output = STEERING_K_P * self.car_error + STEERING_K_I * self.integral + STEERING_K_D * self.derivative
         
         self.prev_ticks = self.ticks        
         self.prev_car_error = self.car_error
+
+        return output
+
+    def _stopping_PID(self, stopping_normalized_dist):
+        self.ticks = cv2.getTickCount()
+        self.dt = (self.ticks - self.prev_ticks) / cv2.getTickFrequency()
+
+        self.car_stopping_error = -1 * stopping_normalized_dist
+        self.integral = self.integral + self.car_error * self.dt
+        self.derivative = (self.car_error - self.prev_car_error)/self.dt
+
+        output = STEERING_K_P * self.car_error + STEERING_K_I * self.integral + STEERING_K_D * self.derivative
+      
+        self.prev_car_stopping_error = self.car_stopping_error
 
         return output
 
@@ -174,13 +182,11 @@ class AutoCrossCar:
         logging.info("Starting AutoCross car in automatic mode")
 
         try:
-
             distance_fl = Distance(FRONT_LEFT_SONAR_PINS)
             distance_fr = Distance(FRONT_RIGHT_SONAR_PINS)
+
             speed_controller = SpeedController()
             speed_controller.start()
-
-            #self._initialize_camera()
 
             logging.info("Creating lane detector")
             lane_detector = LaneDetector(300, self.resolution[0], self.resolution[1], enable_stop_line_detection = False, debug_mode = self.with_display)
@@ -188,10 +194,12 @@ class AutoCrossCar:
             logging.info("Creating stop detector")
             stop_detection_process_pool = multiprocessing.Pool() #processes = 3
             
-
             logging.info("Initializing steering")
             steering = CarSteering()
-            self.car_motor = CarMotor()
+
+            steering_pid = PID(STEERING_K_P, STEERING_K_I, STEERING_K_D)
+
+            stopping_pid = PID(STOPPING_K_P, STOPPING_K_I, STOPPING_K_D)
 
             logging.info("Starting V2V mOdule")
             self.v2v_module.start()
@@ -239,9 +247,6 @@ class AutoCrossCar:
                         self.v2v_ready_for_transit = False
 
                 elif self.state == PROCEED_THROUGH_INTERSECTION:
-                    # lanes = lane_detector.detect(img)
-                    # left_lane = lanes[0]
-                    # right_lane = lanes[1]
 
                     if self.turn_action == ACTION_STRAIGHT:
 
@@ -264,7 +269,8 @@ class AutoCrossCar:
                         # self.car_motor.set_percent_power(self.car_power)
                         speed_controller.set_speed(self.car_desired_speed)
 
-                        steering_output = self._steering_PID(left_lane, right_lane)
+                        # steering_output = self._steering_PID(left_lane, right_lane)
+                        steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
                         steering.set_percent_direction(steering_output)
                     elif self.turn_action == ACTION_TURN_LEFT:
                         pass
@@ -298,14 +304,6 @@ class AutoCrossCar:
 
                     self.state = DETECT_LANES
 
-                    #self.stop_detector.push_img(img)
-                    # lanes = lane_detector.detect(img)
-
-                    # left_lane = lanes[0]
-                    # right_lane = lanes[1]
-                    # stop_line = lanes[2]
-                    # steering_output = 0
-
                     if stop_line is not None:
                         logging.info("Stop line detected. Stopping")                    
                         self.state = WAITING_AT_INTERSECTION
@@ -316,8 +314,6 @@ class AutoCrossCar:
                         intersection_left_lane = left_lane
                         intersection_right_lane = right_lane
 
-                        #TODO: Notify V2V at intersection
-
                         speed_controller.stop()
                         # self.car_motor.set_percent_power(0)
 
@@ -326,7 +322,8 @@ class AutoCrossCar:
                         ##motor.set_percent_power(self.car_power)
                         speed_controller.set_speed(self.car_desired_speed)
                         # self.car_motor.set_percent_power(self.car_power)
-                        steering_output = self._steering_PID(left_lane, right_lane)
+                        # steering_output = self._steering_PID(left_lane, right_lane)
+                        steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
                         steering.set_percent_direction(steering_output)
 
                         img = helpers.draw_helper.draw_steering_output(img, steering_output)

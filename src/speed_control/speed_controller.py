@@ -102,8 +102,6 @@ class SpeedController:
                 self.prev_car_speed_error = self.car_speed_error
                 self.prev_ticks = self.ticks
 
-                
-
                 # clamp power
                 if self.power_output > self.max_power:
                     self.power_output = self.max_power

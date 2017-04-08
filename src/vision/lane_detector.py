@@ -40,16 +40,10 @@ class LaneDetector:
         self.base_distance_height = self.base_dist_height_mod * self.height
 
         # only look for lanes in this region
-        #self.lane_roi = 0.85 * self.height
-
         self.lane_roi = 0.85 * self.height
 
         self.lane_find_upper_bound = 0.9 * self.height #0.8
         self.approx_base_dist = int(1 * self.width / 2)
-
-        
-        #self.stop_line_roi = 0.5 * self.height
-        #self.lane_roi =  * self.height
 
         self.prev_left_lane = None
         self.prev_right_lane = None
