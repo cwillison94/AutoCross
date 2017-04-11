@@ -36,6 +36,25 @@ def draw_steering_output(img, steering_output):
 
     return img
 
+
+def draw_roi(img, rect):
+    global display_on
+    if display_on and len(rect) == 4:
+        cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 0), 3)
+
+    return img
+
+def draw_error(img, error, x_mid, y_mid):
+    global display_on
+    if display_on:
+        l = 20
+        x = x_mid + error
+
+        cv2.line(img, (x-l, y_mid), (x+l, y_mid), (255, 0, 255), 2)
+        cv2.line(img, (x, y_mid - l), (x, y_mid + l), (255, 0, 255), 2)
+    return img
+
+
 def draw_line(img, line):
     global display_on
     if display_on and line is not None:
