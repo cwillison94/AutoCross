@@ -9,8 +9,10 @@ DEFAULT_MAX_ANGLE = 20
 DIRECTION_LEFT = 1
 DIRECTION_RIGHT = 2
 
-PULSEWIDTH_LEFT = 900
-PULSEWIDTH_RIGHT = 1350
+# PULSEWIDTH_LEFT = 900
+# PULSEWIDTH_RIGHT = 1350
+PULSEWIDTH_LEFT = 850
+PULSEWIDTH_RIGHT = 1400
 PULSEWIDTH_MID = (PULSEWIDTH_LEFT + PULSEWIDTH_RIGHT)/2
 
 PULSE_RANGE = PULSEWIDTH_RIGHT - PULSEWIDTH_LEFT
@@ -46,7 +48,6 @@ class CarSteering():
 
 	def set_pulse_width(self, pulse_width):
 		self.pi.set_servo_pulsewidth(self.servo_bcm_pin, pulse_width)
-
 
 def clamp(value, min_value, max_value):
 	if value > max_value:
