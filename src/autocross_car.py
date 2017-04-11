@@ -260,11 +260,6 @@ class AutoCrossCar:
                         else:
                             self.v2v_module.set_cleared()
                             self.state = DETECT_LANES
-                        
-                        # elif self._lane_is_approximated(left_lane):
-                        #     left_lane = intersection_left_lane
-                        # elif self._lane_is_approximated(right_lane):
-                        #     right_lane = intersection_right_lane
 
                         # self.car_motor.set_percent_power(self.car_power)
                         speed_controller.set_speed(self.car_desired_speed)
@@ -272,23 +267,11 @@ class AutoCrossCar:
                         # steering_output = self._steering_PID(left_lane, right_lane)
                         steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
                         steering.set_percent_direction(steering_output)
+                        
                     elif self.turn_action == ACTION_TURN_LEFT:
                         pass
                     elif self.turn_action == ACTION_TURN_RIGHT:
                         pass
-
-                    # if stop_line is not None:
-                    #     proceed_through_intersection_time = time.time()
-
-                    # if  stop_line is not None and (time.time() - proceed_through_intersection_time) < 3 or (self._lane_is_approximated(left_lane) or self._lane_is_approximated(right_lane)):
-                    #     left_lane = intersection_left_lane
-                    #     right_lane = intersection_right_lane
-                    # elif not self._lane_is_approximated(left_lane) and not self._lane_is_approximated(right_lane):
-                    #     self.v2v_module.set_cleared()
-                    #     self.state = DETECT_LANES
-                    
-
-
                 elif self.stop_detected_info[0]:
                     if self.stop_detected_info[1] > 40: #stop sign detected...
                         self.state = WAITING_AT_INTERSECTION
@@ -323,15 +306,10 @@ class AutoCrossCar:
                         speed_controller.set_speed(self.car_desired_speed)
                         # self.car_motor.set_percent_power(self.car_power)
                         # steering_output = self._steering_PID(left_lane, right_lane)
+
                         steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
                         steering.set_percent_direction(steering_output)
-
                         img = helpers.draw_helper.draw_steering_output(img, steering_output)
-                    # img = helpers.draw_helper.draw_lanes(img, left_lane, right_lane, steering_output)
-                    # img = helpers.draw_helper.draw_line(img, stop_line)
-                
-                # speed_controller.maintain_speed_PID()
-                
 
                 if self.with_display:
                     img = helpers.draw_helper.draw_midline(img, self.car_midline)
