@@ -161,6 +161,12 @@ class AutoCrossCar:
         else:
             return True
 
+    def get_steering_error(self, left_lane, right_lane):
+        base_left = _lane_base_distance(left_lane)
+        base_right = _lane_base_distance(right_lane)
+        return (base_left + base_right)/2
+
+
     def _log_exception(self):
         exc_type, exc_obj, tb = sys.exc_info()
         f = tb.tb_frame
@@ -189,7 +195,7 @@ class AutoCrossCar:
             speed_controller.start()
 
             logging.info("Creating lane detector")
-            lane_detector = LaneDetector(300, self.resolution[0], self.resolution[1], enable_stop_line_detection = False, debug_mode = self.with_display)
+            lane_detector = LaneDetector(self.resolution[0], self.resolution[1], enable_stop_line_detection = False, debug_mode = self.with_display)
 
             logging.info("Creating stop detector")
             stop_detection_process_pool = multiprocessing.Pool() #processes = 3
@@ -264,8 +270,8 @@ class AutoCrossCar:
                         # self.car_motor.set_percent_power(self.car_power)
                         speed_controller.set_speed(self.car_desired_speed)
 
-                        # steering_output = self._steering_PID(left_lane, right_lane)
-                        steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
+                        steering_error = self.get_steering_error(left_lane, right_lane)
+                        steering_output = steering_pid.update(error = steering_error)
                         steering.set_percent_direction(steering_output)
                         
                     elif self.turn_action == ACTION_TURN_LEFT:
@@ -306,13 +312,18 @@ class AutoCrossCar:
                         speed_controller.set_speed(self.car_desired_speed)
                         # self.car_motor.set_percent_power(self.car_power)
                         # steering_output = self._steering_PID(left_lane, right_lane)
-
-                        steering_output = steering_pid.update(error = (self._lane_base_distance(left_lane) + self._lane_base_distance(right_lane))/2.)
+                        steering_error = self.get_steering_error(left_lane, right_lane)
+                        steering_output = steering_pid.update(error = steering_error)
                         steering.set_percent_direction(steering_output)
+
                         img = helpers.draw_helper.draw_steering_output(img, steering_output)
+                        img = helpers.draw_helper.draw_error(img, int(error), self.car_midline, lane_detector.base_distance_height)
+
 
                 if self.with_display:
-                    img = helpers.draw_helper.draw_midline(img, self.car_midline)
+                    img = helpers.draw_helper.draw_midline(img, self.car_midline, lane_detector.base_distance_height)
+                    img = helpers.draw_helper.draw_roi(img, [int(x) for x in lane_detector.roi])
+
                     cv2.imshow("auto-live", img)
                     if cv2.waitKey(3) & 0xFF == ord('q'):
                         self.camera.close()

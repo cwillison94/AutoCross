@@ -5,13 +5,12 @@ import numpy as np
 import time
 import math
 
-
 '''Defaults for Hough Line P Transform'''
 #HOUGH_MIN_LINE_LENGTH = 5
 #HOUGH_MAX_LINE_GAP = 30
 
-HOUGH_MIN_LINE_LENGTH = 15
-HOUGH_MAX_LINE_GAP = 50
+HOUGH_MIN_LINE_LENGTH = 50
+HOUGH_MAX_LINE_GAP = 30
 
 HOUGH_THRESHOLD_VOTES = 10
 
@@ -22,27 +21,26 @@ ROI_THETA = 0.3
 
 # Default percent of height to calculate base distance.
 #     Recommended from 0.8 to 1
-BASE_DISTANCE_HEIGHT_MODIFIER = 0.85#0.85
+BASE_DISTANCE_HEIGHT_MODIFIER = 0.75
 
 LANE_WIDTH_PX = 360
 
 
 class LaneDetector:
-    def __init__(self, road_horizon, width, height, enable_stop_line_detection = False,  base_dist_height_mod = BASE_DISTANCE_HEIGHT_MODIFIER, prob_hough= True, debug_mode = False):
-        self.prob_hough = prob_hough
-        self.road_horizon = road_horizon
+    def __init__(self, width, height, enable_stop_line_detection = False, debug_mode = False):
+        
+        self.prob_hough = True
+
         #frame width and height
         self.width = width
         self.height = height
 
-        self.base_dist_height_mod = base_dist_height_mod
-
-        self.base_distance_height = self.base_dist_height_mod * self.height
+        self.base_distance_height = BASE_DISTANCE_HEIGHT_MODIFIER * height
 
         # only look for lanes in this region
-        self.lane_roi = 0.85 * self.height
-
-        self.lane_find_upper_bound = 0.9 * self.height #0.8
+        #x1 y1 x2 y2
+        self.roi = [0, 0.7 * self.height ,self.width, 0.85*self.height ]
+     
         self.approx_base_dist = int(1 * self.width / 2)
 
         self.prev_left_lane = None
@@ -52,6 +50,10 @@ class LaneDetector:
 
         self.debug_mode = debug_mode
         self.enable_stop_line_detection = enable_stop_line_detection
+
+        self.approximated_right_bound = [width, 0, width, height, self.approx_base_dist, True]
+        self.approximated_left_bound = [0, 0, 0, height, -1 * self.approx_base_dist, True]
+
 
     def _standard_hough(self, img, init_vote):
         # Hough transform wrapper to return a list of points like PHough does
@@ -93,37 +95,9 @@ class LaneDetector:
         base_dist = (self.height  - b)/m - self.mid_x
 
         return base_dist_mod, base_dist
-        #return base_dist, base_dist
         
-
-
     def line_length(self, x1, y1, x2, y2):
         return math.sqrt((x1 - x2) ** 2 + (y1-y2) ** 2)
-
-    def _scale_line(self, x1, y1, x2, y2):
-        # scale the farthest point of the segment to be on the drawing horizon
-        if x1 == x2:
-            if y1 < y2:
-                y1 = self.road_horizon
-                y2 = self.height
-                return x1, y1, x2, y2
-            else:
-                y2 = self.road_horizon
-                y1 = self.height
-                return x1, y1, x2, y2
-        if y1 < y2:
-            m = (y1-y2)/(x1-x2)
-            x1 = ((self.road_horizon-y1)/m) + x1
-            y1 = self.road_horizon
-            x2 = ((self.height-y2)/m) + x2
-            y2 = self.height
-        else:
-            m = (y2-y1)/(x2-x1)
-            x2 = ((self.road_horizon-y2)/m) + x2
-            y2 = self.road_horizon
-            x1 = ((self.height-y1)/m) + x1
-            y1 = self.height
-        return int(x1), int(y1), int(x2), int(y2)
 
     def _get_line_intersection(self, line1, line2):
 
@@ -170,10 +144,7 @@ class LaneDetector:
         lane_detect_start = time.time()        
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        roiy_end = frame.shape[0]
-        roix_end = frame.shape[1]
-
-        roi_for_lane = img[self.lane_roi:roiy_end, 0:roix_end]
+        roi_for_lane = img[self.roi[1]:self.roi[3], self.roi[0]:self.roi[2]]
         blur_for_lane = cv2.medianBlur(roi_for_lane, 5)
         contours_for_lane = cv2.Canny(blur_for_lane, 100, 200)
 
@@ -181,8 +152,6 @@ class LaneDetector:
         right_bound = None
         left_lane = None
         right_lane = None
-        left_theta = None
-        right_theta = None
         left_dist_modifier = None
         right_dist_modifier = None
 
@@ -191,63 +160,55 @@ class LaneDetector:
 
         potential_stop_lines = []
 
-
         if self.prob_hough:
             lines = cv2.HoughLinesP(contours_for_lane, 1, np.pi/180, HOUGH_THRESHOLD_VOTES, minLineLength=HOUGH_MIN_LINE_LENGTH, maxLineGap=HOUGH_MAX_LINE_GAP)
         else:
             lines = self._standard_hough(contours_for_lane, HOUGH_THRESHOLD_VOTES)
 
         if lines is not None:
-             # scale points from ROI coordinates to full frame coordinates
-            lines = lines+np.array([0, self.lane_roi, 0, self.lane_roi]).reshape((1, 1, 4))
-
+            # find the rightmost line of the left half of the frame and the leftmost line of the right half
             for l in lines:
-                # find the rightmost line of the left half of the frame and the leftmost line of the right half
-                for x1, y1, x2, y2 in l:
-                    #TODO: Consider convert this to calculate slope and somehow normalizing? This could be faster than arctan
-                    theta = np.arctan2(y2-y1, x2-x1)
-                    theta_abs = np.abs(theta)  # line angle WRT horizon
 
-                    theta_deg = np.rad2deg(theta)
-                    theta_deg_abs = np.abs(theta_deg)
-                    #if theta_abs > ROI_THETA:  # ignore lines with a small angle WRT horizon
-                    if theta_deg_abs > 35:
-                        dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
-                        # dist = dist * 1.2
+                # get line coordinates scaled to full frame
+                x1, y1, x2, y2 = l[0]
+                y2 = y2 + self.roi[1]
+                y1 = y1 + self.roi[1]
 
-                        if left_bound is None and dist < 0 and x1 < self.mid_x and x2 < self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound):# and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound) : # and dist > -1* 1.2 * self.mid_x
-                            left_bound = (x1, y1, x2, y2)
-                            left_dist = dist
-                            left_dist_modifier = dist_with_modifier
-                            left_theta = theta_deg_abs
-                        elif right_bound is None and dist > 0 and x1 > self.mid_x and x2 > self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound):# and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): #and dist < 1.2 * self.mid_x
-                            right_bound = (x1, y1, x2, y2)
-                            right_dist = dist
-                            right_dist_modifier = dist_with_modifier
-                            right_theta = theta_deg_abs
-                        elif left_bound is not None and 0 > dist > left_dist  and x1 < self.mid_x and x2 < self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound): # and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): # and dist > -1* 1.2 * self.mid_x
-                            left_bound = (x1, y1, x2, y2)
-                            left_dist = dist
-                            left_dist_modifier = dist_with_modifier
-                            left_theta = theta_deg_abs
-                        elif right_bound is not None and 0 < dist < right_dist and x1 > self.mid_x and x2 > self.mid_x and (y1 > self.lane_find_upper_bound or y2 > self.lane_find_upper_bound): # and (y1 < self.lane_find_lower_bound and y2 < self.lane_find_lower_bound): # and dist < 1.2 * self.mid_x
-                            right_bound = (x1, y1, x2, y2)
-                            right_dist = dist
-                            right_dist_modifier = dist_with_modifier
-                            right_theta = theta_deg_abs
-                    elif theta_abs < 30:
-                        
-                        if self.enable_stop_line_detection:
-                            # Potential stop lines
-                            if x2 != x1:
-                                m = (y2 - y1) / float((x2 - x1))
-                                length = self.line_length(x1, y1, x2, y2) 
-                                # print "m = " + str(m)
-                                if length > 30:
-                                    potential_stop_lines.append([x1, y1, x2, y2, theta_deg_abs, length])                         
+                theta = np.arctan2(y2-y1, x2-x1)
+                theta_abs = np.abs(theta)  # line angle WRT horizon
+                theta_deg = np.rad2deg(theta)
+                theta_deg_abs = np.abs(theta_deg)
+                
+                # ignore lines with a small angle WRT horizon
+                if theta_deg_abs > 25:
+                    dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
+
+                    #possible left lane boundary
+                    if (left_bound == None or 0 > dist > left_dist)  and x1 < self.mid_x and x2 < self.mid_x: 
+                        left_bound = (x1, y1, x2, y2)
+                        left_dist = dist
+                        left_dist_modifier = dist_with_modifier
+
+                    #possible right lane boundary
+                    elif (right_bound == None or 0 < dist < right_dist) and x1 > self.mid_x and x2 > self.mid_x:
+                        right_bound = (x1, y1, x2, y2)
+                        right_dist = dist
+                        right_dist_modifier = dist_with_modifier
+                
+                #elif theta_abs < 30:    
+                else:
+                    if self.enable_stop_line_detection:
+                        # Potential stop lines
+                        if x2 != x1:
+                            m = (y2 - y1) / float((x2 - x1))
+                            length = self.line_length(x1, y1, x2, y2) 
+                            # print "m = " + str(m)
+                            if length > 30:
+                                potential_stop_lines.append([x1, y1, x2, y2, theta_deg_abs, length])                         
 
             # we only want to approximate at max 1 lane so if both are not found we don't approximate
             if left_bound is None and right_bound is None:
+                print('no lanes found')
                 self.prev_left_lane = None
                 self.prev_right_lane = None
                 return [None, None, None]
@@ -261,7 +222,6 @@ class LaneDetector:
                     # print "RIGHT: x_int: " + str(x2_int) + " y_int: " + str(y2_int) 
 
                     # If the intersects are within the frame region
-
                     if (x1_int is not None and y1_int is not None and x2_int is not None and y2_int is not None 
                         and self._between(x1_int - self.mid_x, left_dist_modifier, right_dist_modifier) and self._between(x2_int - self.mid_x, left_dist_modifier, right_dist_modifier) 
                         and self._between(y1_int, 0,300) and self._between(y1_int, 0, 300)):
@@ -270,7 +230,6 @@ class LaneDetector:
 
             # determine if non-approximated lane is left or right
             if left_bound is None or right_bound is None:
-                # Find the line that is not none
                 if left_bound is not None:
                     line = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3])]
                 else:
@@ -286,90 +245,27 @@ class LaneDetector:
                 theta = np.abs(np.rad2deg(np.arctan2(y2-y1, x2-x1)))
                 print('theta of unapproximated lane: ', theta)
 
-                slope = 100
-                if x2 != x1:
-                    slope = -1 * (y2 - y1)/float(x2 - x1)
-
-                print "SLope = ", slope
-
                 # left lane
-                if slope >= 0:
+                if theta < 90:
                     print('detected lane should be left')
-                    # scale line if debug mode for better visual representation
-                    if self.debug_mode:
-                        #logging.debug("Left theta: ", np.rad2deg(left_theta))
-                        left_bound = self._scale_line(x1, y1, x2, y2)
-
-                    left_lane = [int(line[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), dist_mod, False]
-
-                    right_lane = []
-                    right_lane.append(frame.shape[0])
-                    right_lane.append(0)
-                    right_lane.append(frame.shape[0])
-                    right_lane.append(frame.shape[1])
-                    right_lane.append(self.approx_base_dist)
-                    # True for approximated
-                    right_lane.append(True)
+                    left_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                    right_lane = self.approximated_right_bound
                     print('right bound approximated')
 
                 # right lane
                 else:
                     print('detected lane should be right')
-                    if self.debug_mode:
-                        #logging.debug("Left theta: ", np.rad2deg(left_theta))
-                        right_bound = self._scale_line(x1, y1, x2, y2)
-
-                    right_lane = [int(right_bound[0]),int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), dist_mod, False]
-
-                    # predicted left lane
-                    left_lane = []
-                    left_lane.append(0)
-                    left_lane.append(0)
-                    left_lane.append(0)
-                    left_lane.append(frame.shape[1])
-                    left_lane.append(-1 * self.approx_base_dist)
-                    #True for approximated
-                    left_lane.append(True)
+                    right_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                    left_lane = self.approximated_left_bound
                     print('left bound approximated')
+
 
             else:
 
-                if self.debug_mode:
-                    #logging.debug("Left theta: ", np.rad2deg(left_theta))
-                    left_bound = self._scale_line(left_bound[0], left_bound[1], left_bound[2], left_bound[3])
-
                 left_lane = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3]), left_dist_modifier, False]
-            
-                if self.debug_mode:
-                    #logging.debug("Right theta: ", np.rad2deg(right_theta))
-                    right_bound = self._scale_line(right_bound[0], right_bound[1], right_bound[2], right_bound[3])
-
                 right_lane = [int(right_bound[0]), int(right_bound[1]), int(right_bound[2]), int(right_bound[3]), right_dist_modifier, False]
-
-         # Lanes to close correction
-
-        if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
-            print "Lanes are too close, attempting to correct"
-            # raise Exception("Tests")
-            if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
-                print "Correcting right lane"
-                right_lane = []
-                right_lane.append(frame.shape[0])
-                right_lane.append(0)
-                right_lane.append(frame.shape[0])
-                right_lane.append(frame.shape[1])
-                right_lane.append(self.approx_base_dist)
-                right_lane.append(self.prev_right_lane[5])
-            elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
-                print "Correcting left lane"
-                left_lane = []
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(frame.shape[1])
-                left_lane.append(-1 * self.approx_base_dist)
-                left_lane.append(self.prev_left_lane[5])
-
+          
         self.prev_left_lane = left_lane
         self.prev_right_lane = right_lane
         return [left_lane, right_lane, stop_line]
+
