@@ -80,7 +80,9 @@ class AutoCrossCar:
         self.turn_action = ACTION_STRAIGHT
 
         # [is_detected, normalized_dist]
-        self.stop_detected_info = (False, 100, [])
+        self.stop_sign_detected = False
+        self.stop_sign_distance = 100
+        self.stop_sign_position = []
 
     def _initialize_camera(self):
         if self.camera_initiliazed:
@@ -162,8 +164,8 @@ class AutoCrossCar:
             return True
 
     def get_steering_error(self, left_lane, right_lane):
-        base_left = _lane_base_distance(left_lane)
-        base_right = _lane_base_distance(right_lane)
+        base_left = self._lane_base_distance(left_lane)
+        base_right = self._lane_base_distance(right_lane)
         return (base_left + base_right)/2
 
 
@@ -182,7 +184,9 @@ class AutoCrossCar:
 
     def _stop_sign_detected_callback(self, stop_sign_info):
         #print "stop_sign_info= ", stop_sign_info
-        self.stop_detected_info = stop_sign_info
+        self.stop_sign_detected = stop_sign_info[0]
+        self.stop_sign_distance = stop_sign_info[1]
+        self.stop_sign_position = stop_sign_info[2]
 
     def start_auto(self):
         logging.info("Starting AutoCross car in automatic mode")
@@ -236,7 +240,7 @@ class AutoCrossCar:
                 # drawing functions for lanes and stop sign
                 img = helpers.draw_helper.draw_lanes(img, left_lane, right_lane)
                 img = helpers.draw_helper.draw_line(img, stop_line)
-                img = helpers.draw_helper.draw_rectangle(img, self.stop_detected_info[2])
+                img = helpers.draw_helper.draw_rectangle(img, self.stop_sign_position)
                 
                 if dist_fl < self.min_obj_dist or dist_fr < self.min_obj_dist:
                     logging.info("OBSTACLE DETECTED")
@@ -256,7 +260,7 @@ class AutoCrossCar:
 
                     if self.turn_action == ACTION_STRAIGHT:
 
-                        if self.stop_detected_info[0]:
+                        if self.stop_sign_detected:
                             logging.info("STOP SIGN STILL DETECTED")
                             left_lane = intersection_left_lane
                             right_lane = intersection_right_lane
@@ -278,8 +282,8 @@ class AutoCrossCar:
                         pass
                     elif self.turn_action == ACTION_TURN_RIGHT:
                         pass
-                elif self.stop_detected_info[0]:
-                    if self.stop_detected_info[1] > 40: #stop sign detected...
+                elif self.stop_sign_detected:
+                    if self.stop_sign_distance > 40: #stop sign detected...
                         self.state = WAITING_AT_INTERSECTION
                         # self.car_motor.set_percent_power(0)
                         speed_controller.stop()                    
@@ -317,7 +321,7 @@ class AutoCrossCar:
                         steering.set_percent_direction(steering_output)
 
                         img = helpers.draw_helper.draw_steering_output(img, steering_output)
-                        img = helpers.draw_helper.draw_error(img, int(error), self.car_midline, lane_detector.base_distance_height)
+                        img = helpers.draw_helper.draw_error(img, int(steering_error), self.car_midline, lane_detector.base_distance_height)
 
 
                 if self.with_display:
@@ -346,7 +350,7 @@ class AutoCrossCar:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)#DEBUG
+    logging.basicConfig(level=logging.CRITICAL)#DEBUG
     #logging.propagate = False
     car = AutoCrossCar(with_display = True)
 

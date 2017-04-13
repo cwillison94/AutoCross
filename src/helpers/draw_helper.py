@@ -46,8 +46,8 @@ def draw_lanes(img, left_lane, right_lane):
 
         # scale line for better visual representation
         h = img.shape[0]
-        left_lane = _scale_line(left_lane[0], left_lane[1], left_lane[2], left_lane[3], h)
-        right_lane = _scale_line(right_lane[0], right_lane[1], right_lane[2], right_lane[3], h)
+        #left_lane = _scale_line(left_lane[0], left_lane[1], left_lane[2], left_lane[3], h)
+        #right_lane = _scale_line(right_lane[0], right_lane[1], right_lane[2], right_lane[3], h)
         
         # draw the lanes
         cv2.line(img, (left_lane[0], left_lane[1]), (left_lane[2], left_lane[3]), (0, 0, 255), 5)
@@ -73,6 +73,8 @@ def draw_roi(img, rect):
 def draw_error(img, error, x_mid, y_mid):
     global display_on
     if display_on:
+        x_mid = int(x_mid)
+        y_mid = int(y_mid)
         l = 20
         x = x_mid + error
 
@@ -97,6 +99,10 @@ def draw_line(img, line):
 def draw_midline(img, x_offset, y_offset):
     global display_on
     if display_on:
+        x_offset = int(x_offset)
+        y_offset = int(y_offset)
+        width = int(x_offset*2)
+        height = int(img.shape[0])
         cv2.line(img, (0, y_offset ), (width, y_offset), (255, 0, 0), 1)
         cv2.line(img, (x_offset, 0 ), (x_offset, height), (255, 0, 0), 1)
     return img
