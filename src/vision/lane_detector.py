@@ -185,7 +185,7 @@ class LaneDetector:
                 theta_deg_abs = np.abs(theta_deg)
                 
                 # ignore lines with a small angle WRT horizon
-                if theta_deg_abs > 25:
+                if theta_deg_abs > 35:
                     dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
 
                     #possible left lane boundary

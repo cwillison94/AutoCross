@@ -17,8 +17,8 @@ from car_control.car_motor import CarMotor
 from car_control.car_steering import CarSteering
 from distance.distance import Distance, FRONT_LEFT_SONAR_PINS, FRONT_RIGHT_SONAR_PINS
 from v2v.v2v_module import V2VModule
-from speed_control.speed_controller import SpeedController
-from speed_control.speed_encoder import SpeedEncoder
+from speed_control.speed_controller_nothread import SpeedController
+#from speed_control.speed_encoder import SpeedEncoder
 from helpers.PID import PID
 
 DEFAULT_CAMERA_PARAMS = (608, 608, 32)
@@ -35,7 +35,7 @@ STOPPING_K_D = 0.1
 IDLE = 0
 OBSTACLE_DETECTED = 10
 STOP_SIGN_DETECTED = 20
-DETECT_LANES = 30
+FOLLOW_LANES = 30
 INTERSECTION_DETECTED = 40
 WAITING_AT_INTERSECTION = 50
 PROCEED_THROUGH_INTERSECTION = 60
@@ -44,6 +44,9 @@ PROCEED_THROUGH_INTERSECTION = 60
 ACTION_STRAIGHT = 100
 ACTION_TURN_LEFT = 110
 ACTION_TURN_RIGHT = 120
+
+SPEED_HIGH = 12
+SPEED_LOW = 12
 
 class AutoCrossCar:
     def __init__(self, camera_params = DEFAULT_CAMERA_PARAMS, with_display = False):
@@ -64,7 +67,7 @@ class AutoCrossCar:
         self.derivative = 0
 
         # speed in m/s
-        self.car_desired_speed = 0.2#0.8#1.0
+        self.car_desired_speed = 0.0#0.8#1.0
 
         # TODO: REMOVE THIS AFTER TESTING
         # self.car_power = 15
@@ -74,6 +77,7 @@ class AutoCrossCar:
         self.v2v_ready_for_transit = False
         self.v2v_module = V2VModule(self._v2v_on_ready_callback, debug_mode = True)
         self.state = -1
+        self.previous_state = -1
 
         self.camera = None
 
@@ -81,7 +85,7 @@ class AutoCrossCar:
 
         # [is_detected, normalized_dist]
         self.stop_sign_detected = False
-        self.stop_sign_distance = 100
+        self.stop_sign_distance = 0
         self.stop_sign_position = []
 
     def _initialize_camera(self):
@@ -138,8 +142,8 @@ class AutoCrossCar:
     def get_state_description(self, state):
         if state == OBSTACLE_DETECTED:
             return "OBSTACLE_DETECTED"
-        elif state == DETECT_LANES:
-            return "DETECT_LANES"
+        elif state == FOLLOW_LANES:
+            return "FOLLOW_LANES"
         elif state == STOP_SIGN_DETECTED:
             return "STOP_SIGN_DETECTED"
         elif state == WAITING_AT_INTERSECTION:
@@ -188,15 +192,43 @@ class AutoCrossCar:
         self.stop_sign_distance = stop_sign_info[1]
         self.stop_sign_position = stop_sign_info[2]
 
+    
+    def adjust_steering(self, lanes, steering_pid, steering):
+        left_lane = lanes[0]
+        right_lane = lanes[1]
+        stop_line = lanes[2]
+
+        steering_error = self.get_steering_error(left_lane, right_lane)
+        steering_output = steering_pid.update(error = steering_error)
+
+        if stop_line is not None:
+            logging.info("Stop line detected. Stopping")                    
+            self.state = WAITING_AT_INTERSECTION
+
+            start_intersection_time = time.time()
+
+            self.v2v_module.set_stopped(0)
+
+            speed_controller.stop()
+            # self.car_motor.set_percent_power(0)
+
+        elif left_lane is not None and right_lane is not None:  
+            steering.set_percent_direction(steering_output)
+
+        return (steering_output, steering_error)
+
+
     def start_auto(self):
         logging.info("Starting AutoCross car in automatic mode")
 
         try:
+            lanes = False
+
             distance_fl = Distance(FRONT_LEFT_SONAR_PINS)
             distance_fr = Distance(FRONT_RIGHT_SONAR_PINS)
 
             speed_controller = SpeedController()
-            speed_controller.start()
+            #speed_controller.start()
 
             logging.info("Creating lane detector")
             lane_detector = LaneDetector(self.resolution[0], self.resolution[1], enable_stop_line_detection = False, debug_mode = self.with_display)
@@ -208,10 +240,9 @@ class AutoCrossCar:
             steering = CarSteering()
 
             steering_pid = PID(STEERING_K_P, STEERING_K_I, STEERING_K_D)
-
             stopping_pid = PID(STOPPING_K_P, STOPPING_K_I, STOPPING_K_D)
 
-            logging.info("Starting V2V mOdule")
+            logging.info("Starting V2V module")
             self.v2v_module.start()
 
             # Set drawing level
@@ -223,108 +254,119 @@ class AutoCrossCar:
             rawCapture = PiRGBArray(self.camera, size = self.resolution)
             for frame in self.camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
 
-                start_loop_time = time.time()
-                img = frame.array
-                rawCapture.truncate(0)            
 
                 dist_fl = distance_fl.read_cm()
                 dist_fr = distance_fr.read_cm()
-                
-                stop_detection_process_pool.apply_async(vision.stop_sign_detector.detect_stop_sign, args=(img,), callback=self._stop_sign_detected_callback )
-                lanes = lane_detector.detect(img)   
 
-                left_lane = lanes[0]
-                right_lane = lanes[1]
-                stop_line = lanes[2]
-
-                # drawing functions for lanes and stop sign
-                img = helpers.draw_helper.draw_lanes(img, left_lane, right_lane)
-                img = helpers.draw_helper.draw_line(img, stop_line)
-                img = helpers.draw_helper.draw_rectangle(img, self.stop_sign_position)
                 
+                # obstacle detection must be checked regardless of state
                 if dist_fl < self.min_obj_dist or dist_fr < self.min_obj_dist:
                     logging.info("OBSTACLE DETECTED")
+                    self.previous_state = self.state
+                    self.state = OBSTACLE_DETECTED
                     # self.car_motor.set_percent_power(0)
                     speed_controller.stop()
-                    
+
+                start_loop_time = time.time()
+
+
+                img = frame.array
+                rawCapture.truncate(0)          
+                
+                stop_detection_process_pool.apply_async(vision.stop_sign_detector.detect_stop_sign, args=(img,), callback=self._stop_sign_detected_callback )
+                # lanes = lane_detector.detect(img)   
+                # left_lane = lanes[0]
+                # right_lane = lanes[1]
+                # stop_line = lanes[2]
+
+
+                if self.state == OBSTACLE_DETECTED:
+
+                    while( dist_fl < self.min_obj_dist or dist_fr < self.min_obj_dist ):
+                        dist_fl = distance_fl.read_cm()
+                        dist_fr = distance_fr.read_cm()
+                    self.state = self.previous_state
+                    logging.info("obstacle removed. returning to previous state")
+
                 elif self.state == STOP_SIGN_DETECTED:
-                    pass
+                    logging.info("STATE: STOP SIGN DETECTED. dist: %d" % (self.stop_sign_distance))
+
+                    speed_controller.set_speed(SPEED_LOW)
+
+                    lanes = lane_detector.detect(img)   
+                    left_lane = lanes[0]
+                    right_lane = lanes[1]
+                    stop_line = lanes[2]
+                    # continue following lanes until we are close enough to stop completely
+                    # note: larger distance value means closer
+                    if (self.stop_sign_distance < 40):
+                        steering_output, steering_error = self.adjust_steering(lanes, steering_pid, steering)
+                    else:
+                        # close enough to stop
+                        speed_controller.stop()
+                        self.state = WAITING_AT_INTERSECTION
+
+
+                #switch to STOPPED when we are at threshold
                 elif self.state == WAITING_AT_INTERSECTION:
-                    if self.v2v_ready_for_transit: #or (time.time() - start_intersection_time) > 3:
-                        proceed_through_intersection_time = time.time()
-                        self.state = PROCEED_THROUGH_INTERSECTION
-                        self.v2v_module.set_in_transit()
-                        self.v2v_ready_for_transit = False
+                    self.v2v_module.set_stopped(0)
+                    while not(self.v2v_ready_for_transit):
+                        pass
+                    proceed_through_intersection_time = time.time()
+                    self.state = PROCEED_THROUGH_INTERSECTION
+                    self.v2v_module.set_in_transit()
+                    self.v2v_ready_for_transit = False
+
 
                 elif self.state == PROCEED_THROUGH_INTERSECTION:
+                    speed_controller.set_speed(SPEED_HIGH)
+                    # use previous lanes until later
+                    steering_output, steering_error = self.adjust_steering(lanes, steering_pid, steering)
+                    # assume it take 3 sec to get through intersection...
+                    print("")
+                    if time.time() > (proceed_through_intersection_time + 3):
+                        self.v2v_module.set_cleared()
+                        self.state = FOLLOW_LANES
 
-                    if self.turn_action == ACTION_STRAIGHT:
+                    # # cleared when the lanes are no longer approximated
+                    # if self._lane_is_approximated(left_lane) and self._lane_is_approximated(right_lane):
+                    #   pass
+                    # else:
 
-                        if self.stop_sign_detected:
-                            logging.info("STOP SIGN STILL DETECTED")
-                            left_lane = intersection_left_lane
-                            right_lane = intersection_right_lane
-                        elif self._lane_is_approximated(left_lane) and self._lane_is_approximated(right_lane):
-                            left_lane = intersection_left_lane
-                            right_lane = intersection_right_lane
+
+
+                elif self.state == FOLLOW_LANES:
+
+                    lanes = lane_detector.detect(img)   
+                    left_lane = lanes[0]
+                    right_lane = lanes[1]
+                    stop_line = lanes[2]
+
+                    if self.stop_sign_detected:
+                        self.state = STOP_SIGN_DETECTED
+                    else:       
+                        steering_output, steering_error = self.adjust_steering(lanes, steering_pid, steering)                   
+                        if abs(steering_output) > 30:
+                            speed_controller.set_speed(SPEED_LOW)
                         else:
-                            self.v2v_module.set_cleared()
-                            self.state = DETECT_LANES
+                            speed_controller.set_speed(SPEED_HIGH)
 
-                        # self.car_motor.set_percent_power(self.car_power)
-                        speed_controller.set_speed(self.car_desired_speed)
-
-                        steering_error = self.get_steering_error(left_lane, right_lane)
-                        steering_output = steering_pid.update(error = steering_error)
-                        steering.set_percent_direction(steering_output)
-                        
-                    elif self.turn_action == ACTION_TURN_LEFT:
-                        pass
-                    elif self.turn_action == ACTION_TURN_RIGHT:
-                        pass
-                elif self.stop_sign_detected:
-                    if self.stop_sign_distance > 40: #stop sign detected...
-                        self.state = WAITING_AT_INTERSECTION
-                        # self.car_motor.set_percent_power(0)
-                        speed_controller.stop()                    
-                        self.v2v_module.set_stopped(0)
-                        intersection_left_lane = left_lane
-                        intersection_right_lane = right_lane
-                    else: 
-                        logging.info("SLOWING DOWN")
-                        # speed_controller.slowdown()
+                
                 else:
-
-                    self.state = DETECT_LANES
-
-                    if stop_line is not None:
-                        logging.info("Stop line detected. Stopping")                    
-                        self.state = WAITING_AT_INTERSECTION
-
-                        start_intersection_time = time.time()
-
-                        self.v2v_module.set_stopped(0)
-                        intersection_left_lane = left_lane
-                        intersection_right_lane = right_lane
-
-                        speed_controller.stop()
-                        # self.car_motor.set_percent_power(0)
-
-                    elif left_lane is not None and right_lane is not None:
-                        self.state = DETECT_LANES
-                        ##motor.set_percent_power(self.car_power)
-                        speed_controller.set_speed(self.car_desired_speed)
-                        # self.car_motor.set_percent_power(self.car_power)
-                        # steering_output = self._steering_PID(left_lane, right_lane)
-                        steering_error = self.get_steering_error(left_lane, right_lane)
-                        steering_output = steering_pid.update(error = steering_error)
-                        steering.set_percent_direction(steering_output)
-
-                        img = helpers.draw_helper.draw_steering_output(img, steering_output)
-                        img = helpers.draw_helper.draw_error(img, int(steering_error), self.car_midline, lane_detector.base_distance_height)
+                    self.state = FOLLOW_LANES
 
 
-                if self.with_display:
+
+                if self.with_display and lanes:
+
+                    # drawing functions for lanes and stop sign
+                    img = helpers.draw_helper.draw_lanes(img, left_lane, right_lane)
+                    img = helpers.draw_helper.draw_line(img, stop_line)
+                    img = helpers.draw_helper.draw_rectangle(img, self.stop_sign_position)
+
+                    #img = helpers.draw_helper.draw_steering_output(img, steering_output)
+                    #img = helpers.draw_helper.draw_error(img, int(steering_error), self.car_midline, lane_detector.base_distance_height)
+
                     img = helpers.draw_helper.draw_midline(img, self.car_midline, lane_detector.base_distance_height)
                     img = helpers.draw_helper.draw_roi(img, [int(x) for x in lane_detector.roi])
 
@@ -350,7 +392,7 @@ class AutoCrossCar:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.CRITICAL)#DEBUG
+    logging.basicConfig(level=logging.INFO)#CRITICAL
     #logging.propagate = False
     car = AutoCrossCar(with_display = True)
 
@@ -359,6 +401,7 @@ if __name__ == "__main__":
     # except:
         # car.cleanup()
        
+
 
 
 
