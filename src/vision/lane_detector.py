@@ -21,7 +21,7 @@ ROI_THETA = 0.3
 
 # Default percent of height to calculate base distance.
 #     Recommended from 0.8 to 1
-BASE_DISTANCE_HEIGHT_MODIFIER = 0.9
+BASE_DISTANCE_HEIGHT_MODIFIER = 0.6#0.85
 
 LANE_WIDTH_PX = 360
 
@@ -42,8 +42,10 @@ class LaneDetector:
 
         # only look for lanes in this region
         #x1 y1 x2 y2
-        self.roi = [0, 0.85 * self.height ,self.width, 1.0*self.height ]
-     
+        self.roi = [0, 0.9 * self.height ,self.width, 1.0*self.height ]
+        #self.roi = [(1-0.85)*self.width, 0.7 * self.height , 0.85*self.width, 0.9*self.height ]
+
+        #self.approx_base_dist = int(3 * self.width / 4)
         self.approx_base_dist = int(1 * self.width / 2)
 
         self.prev_left_lane = None
@@ -56,6 +58,9 @@ class LaneDetector:
 
         self.approximated_right_bound = [width, 0, width, height, self.approx_base_dist, True]
         self.approximated_left_bound = [0, 0, 0, height, -1 * self.approx_base_dist, True]
+
+        self.extreme_approximated_right_bound = [width, 0, width, height, self.approx_base_dist * 2, True]
+        self.extreme_approximated_left_bound = [0, 0, 0, height, -1 * self.approx_base_dist * 2, True]
 
 
     def _standard_hough(self, img, init_vote):
@@ -176,6 +181,8 @@ class LaneDetector:
 
                 # get line coordinates scaled to full frame
                 x1, y1, x2, y2 = l[0]
+                x2 = x2 + self.roi[0]
+                x1 = x1 + self.roi[0]
                 y2 = y2 + self.roi[1]
                 y1 = y1 + self.roi[1]
 
@@ -251,7 +258,7 @@ class LaneDetector:
                 theta = (np.rad2deg(np.arctan2(y2-y1, x2-x1)))
                 print('theta of unapproximated lane: ', theta)
 
-                # left lane
+                #left lane
                 if theta < 0:
                     print('detected lane should be left')
                     left_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
@@ -264,6 +271,28 @@ class LaneDetector:
                     right_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
                     left_lane = self.approximated_left_bound
                     print('left bound approximated')
+                # if theta < -40:
+                #     print('detected lane should be left')
+                #     left_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                #     right_lane = self.extreme_approximated_right_bound
+                #     print('FAR right bound approximated')
+                # elif theta < 0:
+                #     print('detected lane should be left')
+                #     right_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                #     left_lane = self.approximated_right_bound
+                #     print('right bound approximated')
+
+                # # right lane
+                # elif theta > 40:
+                #     print('detected lane should be right')
+                #     right_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                #     left_lane = self.extreme_approximated_left_bound
+                #     print('FAR left bound approximated')
+                # else:
+                #     print('detected lane should be slight right')
+                #     right_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
+                #     left_lane = self.extreme_approximated_left_bound
+                #     print('left bound approximated')
 
 
             else:

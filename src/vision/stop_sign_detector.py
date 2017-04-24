@@ -14,6 +14,7 @@ def detect_stop_sign(img):
 
     rects[:, 2:] += rects[:, :2]
 
+    # x1 y1 x2 y2
     # shift back to original image
     for i in range(len(rects)):
         rects[i][0] += img.shape[0]/2
