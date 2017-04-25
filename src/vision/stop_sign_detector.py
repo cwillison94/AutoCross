@@ -13,24 +13,24 @@ def detect_stop_sign(img):
         return (False, 100, [])
 
     rects[:, 2:] += rects[:, :2]
+    x1, y1, x2, y2 = rects[0]
+    stop_img = img_roi[y1:y2, x1:x2]
 
-    # x1 y1 x2 y2
     # shift back to original image
-    for i in range(len(rects)):
-        rects[i][0] += img.shape[0]/2
-        rects[i][2] += img.shape[0]/2
+    #for i in range(len(rects)):
+    rects[0][0] += img.shape[0]/2
+    rects[0][2] += img.shape[0]/2
 
-        #rects[i][1] += img.shape[1]/2
-        #rects[i][3] += img.shape[1]/2
 
-    if len(rects) > 0:
-        stop_sign_detected = True
-        x1, y1, x2, y2 = rects[0]
-        normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
-    else:
-        stop_sign_detected = False
-        normalized_distance = 100
-
-    return (stop_sign_detected, normalized_distance, (x1, y1, x2, y2))
+    # if len(rects) > 0:
+    #stop_sign_detected = True
+    x1, y1, x2, y2 = rects[0]
+    normalized_distance = int(100 * ((y1 + y2) / 2.)/img.shape[1])
+    # else:
+    #     stop_img = None
+    #     stop_sign_detected = False
+    #     normalized_distance = 100
+    return (True, normalized_distance, (x1, y1, x2, y2), stop_img)
+    #return (stop_sign_detected, normalized_distance, (x1, y1, x2, y2), stop_img)
 
 

@@ -23,7 +23,7 @@ from helpers.PID import PID
 
 DEFAULT_CAMERA_PARAMS = (608, 608, 32)
 
-STEERING_K_P = 0.61#0.61
+STEERING_K_P = 0.64#0.61
 STEERING_K_I = 0
 STEERING_K_D = 0.19
 
@@ -84,6 +84,7 @@ class AutoCrossCar:
         self.stop_sign_detected = False
         self.stop_sign_distance = 0
         self.stop_sign_position = []
+        self.stop_img = None
 
     def _initialize_camera(self):
         if self.camera_initiliazed:
@@ -157,6 +158,7 @@ class AutoCrossCar:
         self.stop_sign_detected = stop_sign_info[0]
         self.stop_sign_distance = stop_sign_info[1]
         self.stop_sign_position = stop_sign_info[2]
+        self.stop_img = stop_sign_info[3]
 
     
     def adjust_steering(self, lanes):
@@ -215,6 +217,25 @@ class AutoCrossCar:
             if cv2.waitKey(3) & 0xFF == ord('q'):
                 self.camera.close()
                 #break
+
+    # get direction of approach from color of stop sign
+    def get_stop_direction(self):
+        mean_color = cv2.mean(self.stop_img)
+        bgr_max = max(mean_color)
+        bgr_min = min(mean_color)
+
+        if rgb_max < 100:
+            print("BLACK/GRAY")
+            return 0
+        elif mean.index(rgb_max) == 0:
+            print("BLUE")
+            return 1
+        elif mean.index(rgb_max) == 1:
+            print("GREEN")
+            return 2
+        else:
+            print("RED")
+            return 3
 
 
     def start_auto(self):
@@ -298,7 +319,8 @@ class AutoCrossCar:
 
                 #switch to STOPPED when we are at threshold
                 elif self.state == WAITING_AT_INTERSECTION:
-                    self.v2v_module.set_stopped(0)
+                    direction = self.get_stop_direction()
+                    self.v2v_module.set_stopped(direction)
                     while not(self.v2v_ready_for_transit):
                         pass
                     proceed_through_intersection_time = time.time()
@@ -312,7 +334,7 @@ class AutoCrossCar:
                     # use previous lanes until later
                     steering_output, steering_error = self.adjust_steering(lanes)
                     # assume it take 3 sec to get through intersection
-                    if time.time() > (proceed_through_intersection_time + 3):
+                    if time.time() > (proceed_through_intersection_time + 2):
                         self.v2v_module.set_cleared()
                         self.state = FOLLOW_LANES
 
@@ -332,12 +354,8 @@ class AutoCrossCar:
                         else:
                             speed_controller.set_speed(SPEED_HIGH)
 
-                
                 else:
                     self.state = FOLLOW_LANES
-
-
-
 
                 self.draw_img(img, lanes, steering_output, steering_error)
                 logging.debug("State: " + self.get_state_description(self.state))

@@ -6,11 +6,11 @@ import time
 import math
 
 '''Defaults for Hough Line P Transform'''
-HOUGH_MIN_LINE_LENGTH = 5
-HOUGH_MAX_LINE_GAP = 30
+HOUGH_MIN_LINE_LENGTH = 10
+HOUGH_MAX_LINE_GAP = 15
 
-#HOUGH_MIN_LINE_LENGTH = 20
-#HOUGH_MAX_LINE_GAP = 20
+# HOUGH_MIN_LINE_LENGTH = 5
+# HOUGH_MAX_LINE_GAP = 30
 
 HOUGH_THRESHOLD_VOTES = 20
 
@@ -21,7 +21,7 @@ ROI_THETA = 0.3
 
 # Default percent of height to calculate base distance.
 #     Recommended from 0.8 to 1
-BASE_DISTANCE_HEIGHT_MODIFIER = 0.6#0.85
+BASE_DISTANCE_HEIGHT_MODIFIER = 0.7#0.75#0.85
 
 LANE_WIDTH_PX = 360
 
@@ -42,7 +42,7 @@ class LaneDetector:
 
         # only look for lanes in this region
         #x1 y1 x2 y2
-        self.roi = [0, 0.9 * self.height ,self.width, 1.0*self.height ]
+        self.roi = [15, 0.85 * self.height ,self.width-15, 1.0*self.height ]
         #self.roi = [(1-0.85)*self.width, 0.7 * self.height , 0.85*self.width, 0.9*self.height ]
 
         #self.approx_base_dist = int(3 * self.width / 4)
@@ -192,6 +192,21 @@ class LaneDetector:
                 theta_deg_abs = np.abs(theta_deg)
                 
                 # ignore lines with a small angle WRT horizon
+                # if theta_deg_abs > 35:
+                #     dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
+
+                #     #possible left lane boundary
+                #     if (left_bound == None or 0 > dist > left_dist)  and x1 < self.mid_x and x2 < self.mid_x: 
+                #         left_bound = (x1, y1, x2, y2)
+                #         left_dist = dist
+                #         left_dist_modifier = dist_with_modifier
+
+                #     #possible right lane boundary
+                #     elif (right_bound == None or 0 < dist < right_dist) and x1 > self.mid_x and x2 > self.mid_x:
+                #         right_bound = (x1, y1, x2, y2)
+                #         right_dist = dist
+                #         right_dist_modifier = dist_with_modifier
+
                 if theta_deg_abs > 35:
                     dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
 
