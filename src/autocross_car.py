@@ -45,8 +45,8 @@ ACTION_STRAIGHT = 100
 ACTION_TURN_LEFT = 110
 ACTION_TURN_RIGHT = 120
 
-SPEED_HIGH = 15
-SPEED_LOW = 15
+SPEED_HIGH = 15#15
+SPEED_LOW = 15#15
 
 class AutoCrossCar:
     def __init__(self, camera_params = DEFAULT_CAMERA_PARAMS, with_display = False):
@@ -221,16 +221,17 @@ class AutoCrossCar:
     # get direction of approach from color of stop sign
     def get_stop_direction(self):
         mean_color = cv2.mean(self.stop_img)
+        print("STOP BGR MEANS: ", mean_color)
         bgr_max = max(mean_color)
         bgr_min = min(mean_color)
 
-        if rgb_max < 100:
+        if bgr_max < 80:
             print("BLACK/GRAY")
             return 0
-        elif mean.index(rgb_max) == 0:
+        elif mean_color.index(bgr_max) == 0:
             print("BLUE")
             return 1
-        elif mean.index(rgb_max) == 1:
+        elif mean_color.index(bgr_max) == 1:
             print("GREEN")
             return 2
         else:
@@ -299,7 +300,7 @@ class AutoCrossCar:
                     logging.info("obstacle removed. returning to previous state")
 
                 elif self.state == STOP_SIGN_DETECTED:
-                    logging.info("STATE: STOP SIGN DETECTED. dist: %d" % (self.stop_sign_distance))
+                    #logging.info("STATE: STOP SIGN DETECTED. dist: %d" % (self.stop_sign_distance))
 
                     speed_controller.set_speed(SPEED_LOW)
 
@@ -340,6 +341,9 @@ class AutoCrossCar:
 
                 elif self.state == FOLLOW_LANES:
 
+                    speed_controller.set_speed(SPEED_HIGH)
+
+
                     lanes = self.lane_detector.detect(img)   
                     left_lane = lanes[0]
                     right_lane = lanes[1]
@@ -349,10 +353,6 @@ class AutoCrossCar:
                         self.state = STOP_SIGN_DETECTED
                     else:       
                         steering_output, steering_error = self.adjust_steering(lanes)                   
-                        if abs(steering_output) > 30:
-                            speed_controller.set_speed(SPEED_LOW)
-                        else:
-                            speed_controller.set_speed(SPEED_HIGH)
 
                 else:
                     self.state = FOLLOW_LANES
