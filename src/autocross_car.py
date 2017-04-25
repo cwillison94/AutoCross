@@ -45,8 +45,8 @@ ACTION_STRAIGHT = 100
 ACTION_TURN_LEFT = 110
 ACTION_TURN_RIGHT = 120
 
-SPEED_HIGH = 15#15
-SPEED_LOW = 15#15
+SPEED_HIGH = 7.5#15
+SPEED_LOW = 7.0#15
 
 class AutoCrossCar:
     def __init__(self, camera_params = DEFAULT_CAMERA_PARAMS, with_display = False):
@@ -155,10 +155,11 @@ class AutoCrossCar:
 
     def _stop_sign_detected_callback(self, stop_sign_info):
         #print "stop_sign_info= ", stop_sign_info
-        self.stop_sign_detected = stop_sign_info[0]
-        self.stop_sign_distance = stop_sign_info[1]
-        self.stop_sign_position = stop_sign_info[2]
-        self.stop_img = stop_sign_info[3]
+        if self.state != PROCEED_THROUGH_INTERSECTION:
+            self.stop_sign_detected = stop_sign_info[0]
+            self.stop_sign_distance = stop_sign_info[1]
+            self.stop_sign_position = stop_sign_info[2]
+            self.stop_img = stop_sign_info[3]
 
     
     def adjust_steering(self, lanes):
@@ -256,7 +257,7 @@ class AutoCrossCar:
             self.lane_detector = LaneDetector(self.resolution[0], self.resolution[1], enable_stop_line_detection = False, debug_mode = self.with_display)
 
             logging.info("Creating stop detector")
-            stop_detection_process_pool = multiprocessing.Pool() #processes = 3
+            stop_detection_process_pool = multiprocessing.Pool(processes = 3) #processes = 3
             
             logging.info("Initializing steering")
             self.steering = CarSteering()
@@ -290,7 +291,10 @@ class AutoCrossCar:
                 rawCapture.truncate(0)          
                 
                 stop_detection_process_pool.apply_async(vision.stop_sign_detector.detect_stop_sign, args=(img,), callback=self._stop_sign_detected_callback )
-
+                # stop_s = time.time()
+                # derp = vision.stop_sign_detector.detect_stop_sign(img)
+                # stop_end = time.time() - stop_s
+                # print("stop loop: %f" % (stop_end))
                 if self.state == OBSTACLE_DETECTED:
 
                     while self.check_for_obstacle():
@@ -300,7 +304,7 @@ class AutoCrossCar:
                     logging.info("obstacle removed. returning to previous state")
 
                 elif self.state == STOP_SIGN_DETECTED:
-                    #logging.info("STATE: STOP SIGN DETECTED. dist: %d" % (self.stop_sign_distance))
+                    logging.info("STATE: STOP SIGN DETECTED. dist: %d" % (self.stop_sign_distance))
 
                     speed_controller.set_speed(SPEED_LOW)
 
@@ -308,9 +312,10 @@ class AutoCrossCar:
                     left_lane = lanes[0]
                     right_lane = lanes[1]
                     stop_line = lanes[2]
+
                     # continue following lanes until we are close enough to stop completely
                     # note: larger distance value means closer
-                    if (self.stop_sign_distance < 40):
+                    if (self.stop_sign_distance < 50):
                         steering_output, steering_error = self.adjust_steering(lanes)
                     else:
                         # close enough to stop
@@ -331,18 +336,24 @@ class AutoCrossCar:
 
 
                 elif self.state == PROCEED_THROUGH_INTERSECTION:
+
+                    # clear stop data
+                    self.stop_sign_detected = False
+                    self.stop_sign_distance = 0
+                    self.stop_sign_position = []
+                    self.stop_img = None
+
                     speed_controller.set_speed(SPEED_HIGH)
                     # use previous lanes until later
                     steering_output, steering_error = self.adjust_steering(lanes)
                     # assume it take 3 sec to get through intersection
-                    if time.time() > (proceed_through_intersection_time + 2):
+                    if time.time() > (proceed_through_intersection_time + 3):
                         self.v2v_module.set_cleared()
                         self.state = FOLLOW_LANES
 
                 elif self.state == FOLLOW_LANES:
 
                     speed_controller.set_speed(SPEED_HIGH)
-
 
                     lanes = self.lane_detector.detect(img)   
                     left_lane = lanes[0]
@@ -358,9 +369,12 @@ class AutoCrossCar:
                     self.state = FOLLOW_LANES
 
                 self.draw_img(img, lanes, steering_output, steering_error)
-                logging.debug("State: " + self.get_state_description(self.state))
-                logging.debug("Loop time (ms): " + str((time.time() - start_loop_time) * 1000) + " ms")
+                #logging.debug("State: " + self.get_state_description(self.state))
+                looptime = ((time.time() - start_loop_time) * 1000)
+                if looptime > 200:
+                    logging.critical("Loop time (ms): " + str(looptime) + " ms")
                 #END OF FRAME LOOP
+
         except Exception as ex:
             logging.info("CLOSING DOWN")
             traceback.print_exc()
@@ -375,9 +389,9 @@ class AutoCrossCar:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)#CRITICAL
+    logging.basicConfig(level=logging.INFO)#CRITICAL, DEBUG, INFO
     #logging.propagate = False
-    car = AutoCrossCar(with_display = True)
+    car = AutoCrossCar(with_display = False)
 
     # try: 
     car.start_auto()

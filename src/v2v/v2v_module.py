@@ -19,7 +19,7 @@ MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$
 class V2VModule(Thread):
 
 
-	def __init__(self, ready_callback, debug_mode=False):
+	def __init__(self, ready_callback, debug_mode=True):
 		super(V2VModule, self).__init__()
 
 		self.ready_callback = ready_callback
@@ -110,6 +110,8 @@ class V2VModule(Thread):
 	# }
 	def _update_vehicles(self, vehicle_id, vehicle_data):
 
+		self.debug_print("new vehicle data received (%s): %s " % ( str(vehicle_id), str(vehicle_data) ) )
+
 		self.ready = False
 
 		state = vehicle_data["state"]
@@ -157,11 +159,11 @@ class V2VModule(Thread):
 	# Receiver callback, triggered when a NEW message is received
 	# update our vehicle data
 	def _on_message_received(self, msg):
-
-
-		params = self._parse_message(str(msg))
+		string = ''.join(chr(e) for e in msg)
+		params = self._parse_message(str(string))
 
 		if params:
+			self.debug_print("new message received: %s" % (string))
 			vehicle_id = str(params[0])
 			vehicle_data = {
 					"state": int(params[1]),
@@ -169,7 +171,7 @@ class V2VModule(Thread):
 					"speed": int(params[3])
 			}
 
-			_update_vehicles(vehicle_id, vehicle_data)
+			self._update_vehicles(vehicle_id, vehicle_data)
 
 	# validate format, extract vehicle data and remove self-messages
 	def _parse_message(self, msg):

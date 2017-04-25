@@ -16,7 +16,7 @@ class SpeedController:
 
 	def set_speed(self, speed):
 		if self.power_output != speed:
-			print("setting speed to %d" % (speed))
+			print("setting speed to %f" % (speed))
 			self.power_output = speed
 			self.car_motor.set_percent_power(speed)
 

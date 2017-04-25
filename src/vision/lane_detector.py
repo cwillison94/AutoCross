@@ -5,12 +5,19 @@ import numpy as np
 import time
 import math
 
-HOUGH_MIN_LINE_LENGTH = 10
-HOUGH_MAX_LINE_GAP = 15
+HOUGH_MIN_LINE_LENGTH = 12
+HOUGH_MAX_LINE_GAP = 3
+
+# 12 and 3 work nicely
+# HOUGH_MIN_LINE_LENGTH = 12
+# HOUGH_MAX_LINE_GAP = 3
+
+
+# larger line gap (60) actually reduces diagonal lines on dotted segments, but overall better to make very small max line gap
 
 '''Defaults for Hough Line P Transform'''
-# HOUGH_MIN_LINE_LENGTH = 5
-# HOUGH_MAX_LINE_GAP = 30
+# HOUGH_MIN_LINE_LENGTH = 10
+# HOUGH_MAX_LINE_GAP = 15
 
 HOUGH_THRESHOLD_VOTES = 20
 
@@ -23,9 +30,10 @@ ROI_THETA = 0.3
 #     Recommended from 0.8 to 1
 BASE_DISTANCE_HEIGHT_MODIFIER = 0.7#0.75#0.85
 
-LANE_WIDTH_PX = 360
+LANE_WIDTH_PX = 400#360
 
 kernel = np.ones((5,5), np.uint8)
+
 
 
 
@@ -42,7 +50,7 @@ class LaneDetector:
 
         # only look for lanes in this region
         #x1 y1 x2 y2
-        self.roi = [15, 0.85 * self.height ,self.width-15, 1.0*self.height ]
+        self.roi = [30, 0.8 * self.height ,self.width - 30, 1.0 * self.height ]
         #self.roi = [(1-0.85)*self.width, 0.7 * self.height , 0.85*self.width, 0.9*self.height ]
 
         #self.approx_base_dist = int(3 * self.width / 4)
@@ -188,22 +196,6 @@ class LaneDetector:
                 theta_deg = np.rad2deg(theta)
                 theta_deg_abs = np.abs(theta_deg)
                 
-                # ignore lines with a small angle WRT horizon
-                # if theta_deg_abs > 35:
-                #     dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
-
-                #     #possible left lane boundary
-                #     if (left_bound == None or 0 > dist > left_dist)  and x1 < self.mid_x and x2 < self.mid_x: 
-                #         left_bound = (x1, y1, x2, y2)
-                #         left_dist = dist
-                #         left_dist_modifier = dist_with_modifier
-
-                #     #possible right lane boundary
-                #     elif (right_bound == None or 0 < dist < right_dist) and x1 > self.mid_x and x2 > self.mid_x:
-                #         right_bound = (x1, y1, x2, y2)
-                #         right_dist = dist
-                #         right_dist_modifier = dist_with_modifier
-
                 if theta_deg_abs > 35:
                     dist_with_modifier, dist = self._base_distance(x1, y1, x2, y2)
 
@@ -232,7 +224,7 @@ class LaneDetector:
 
             # we only want to approximate at max 1 lane so if both are not found we don't approximate
             if left_bound is None and right_bound is None:
-                print('no lanes found')
+                #print('no lanes found')
                 self.prev_left_lane = None
                 self.prev_right_lane = None
                 return [None, None, None]
@@ -253,7 +245,7 @@ class LaneDetector:
                         stop_line = [int(x1), int(y1), int(x2), int(y2)]
 
             # determine if non-approximated lane is left or right
-            if left_bound is None or right_bound is None:
+            if left_bound is None or right_bound is None or (right_dist_modifier - left_dist_modifier) < 200:
                 if left_bound is not None:
                     line = [int(left_bound[0]),int(left_bound[1]), int(left_bound[2]), int(left_bound[3])]
                 else:
@@ -268,24 +260,24 @@ class LaneDetector:
 
                 #theta = np.abs(np.rad2deg(np.arctan2(y2-y1, x2-x1)))
                 theta = (np.rad2deg(np.arctan2(y2-y1, x2-x1)))
-                print('theta of unapproximated lane: ', theta)
+                #print('dist mod of unapproximated lane: ', dist_mod)
 
                 #left lane
-                if theta < 0:
-                    print('detected lane should be left')
+                if dist_mod < -50 or theta < 0:
+                    #print('detected lane should be left')
                     left_lane = [int(x1),int(y1), int(x2), int(y2), dist_mod, False]
-                    #right_lane = self.approximated_right_bound
-                    right_lane = [ int(x1 + LANE_WIDTH_PX), int(y1), int(x2 + LANE_WIDTH_PX), int(y2), dist_mod + LANE_WIDTH_PX, True]
+                    right_lane = self.approximated_right_bound
+                    #right_lane = [ int(x1 + LANE_WIDTH_PX), int(y1), int(x2 + LANE_WIDTH_PX), int(y2), dist_mod + LANE_WIDTH_PX, True]
 
-                    print('right bound approximated')
+                    #print('right bound approximated')
 
                 # right lane
-                else:
-                    print('detected lane should be right')
+                elif dist_mod > 50 or theta > 0:
+                    #print('detected lane should be right')
                     right_lane = [ int(x1), int(y1), int(x2), int(y2), dist_mod, False]
-                    #left_lane = self.approximated_left_bound
-                    left_lane = [ int(x1 - LANE_WIDTH_PX), int(y1), int(x2 - LANE_WIDTH_PX), int(y2), dist_mod - LANE_WIDTH_PX, True]
-                    print('left bound approximated')
+                    left_lane = self.approximated_left_bound
+                    #left_lane = [ int(x1 - LANE_WIDTH_PX), int(y1), int(x2 - LANE_WIDTH_PX), int(y2), dist_mod - LANE_WIDTH_PX, True]
+                    #print('left bound approximated')
   
 
             else:
@@ -295,27 +287,27 @@ class LaneDetector:
           
         
 
-        if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:
-            print "Lanes are too close, attempting to correct"
-            # raise Exception("Tests")
-            if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
-                print "Correcting right lane"
-                right_lane = []
-                right_lane.append(frame.shape[0])
-                right_lane.append(0)
-                right_lane.append(frame.shape[0])
-                right_lane.append(frame.shape[1])
-                right_lane.append(self.approx_base_dist)
-                right_lane.append(self.prev_right_lane[5])
-            elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
-                print "Correcting left lane"
-                left_lane = []
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(0)
-                left_lane.append(frame.shape[1])
-                left_lane.append(-1 * self.approx_base_dist)
-                left_lane.append(self.prev_left_lane[5])
+        # if left_lane is not None and right_lane is not None and (right_lane[4] - left_lane[4]) < 200:#200:
+        #     print "Lanes are too close, attempting to correct"
+        #     # raise Exception("Tests")
+        #     if self.prev_right_lane is not None and self.prev_right_lane[5]: #was the last lane approximated
+        #         print "Correcting right lane"
+        #         right_lane = []
+        #         right_lane.append(frame.shape[0])
+        #         right_lane.append(0)
+        #         right_lane.append(frame.shape[0])
+        #         right_lane.append(frame.shape[1])
+        #         right_lane.append(self.approx_base_dist)
+        #         right_lane.append(self.prev_right_lane[5])
+        #     elif self.prev_left_lane is not None and self.prev_left_lane[5]: #was the last lane approximated
+        #         print "Correcting left lane"
+        #         left_lane = []
+        #         left_lane.append(0)
+        #         left_lane.append(0)
+        #         left_lane.append(0)
+        #         left_lane.append(frame.shape[1])
+        #         left_lane.append(-1 * self.approx_base_dist)
+        #         left_lane.append(self.prev_left_lane[5])
 
 
         self.prev_left_lane = left_lane
