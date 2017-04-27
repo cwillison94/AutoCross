@@ -16,6 +16,8 @@ import re
 DEVICE_ID = hex(get_mac())[-5:-1] 
 MESSAGE_FORMAT = re.compile('^([a-fA-F0-9]{4}):([0-3]{1}):([0-3]{1}):([0-9]{3})$')
 
+last_message = ""
+
 class V2VModule(Thread):
 
 
@@ -30,7 +32,6 @@ class V2VModule(Thread):
 		self.condition = Condition() # thread control variable (ensures alternating threads)
 		self.receiver = ReceiveThread(self.condition, self._on_message_received)
 		self.transmitter = TransmitThread(None, self.condition, None)
-
 
 		# car state, set externally ONLY by main car controller
 		# IDLE, STOPPED, IN_TRANSIT, CLEARED
@@ -58,7 +59,7 @@ class V2VModule(Thread):
 
 			# do nothing until we get to an intersection
 			# during this time vehicle queue is constantly being updated as _on_message_received is triggered
-			time.sleep(0.1)
+			time.sleep(0.05)
 
 			# transmit STOPPED signal and wait for our turn to transit
 			if self.state == STOPPED:
@@ -110,8 +111,9 @@ class V2VModule(Thread):
 	# }
 	def _update_vehicles(self, vehicle_id, vehicle_data):
 
-		self.debug_print("new vehicle data received (%s): %s " % ( str(vehicle_id), str(vehicle_data) ) )
-
+		#self.debug_print("new vehicle data received (%s): %s " % ( str(vehicle_id), str(vehicle_data) ) )
+		#self.debug_print("# of vehicles in vehicle data ")
+		#self.debug_print("_update_vehicles called. # of vehicles recorded: %d" % (len(self.vehicles.keys())) )
 		self.ready = False
 
 		state = vehicle_data["state"]
@@ -120,39 +122,50 @@ class V2VModule(Thread):
 		# vehicle was already recorded. update its state
 		if vehicle_id in self.vehicles.keys():
 			if state == CLEARED: #remove the vehicle from our record
+				self.debug_print("cleared state read for %s. removing." % (vehicle_id))
 				del self.vehicles[vehicle_id]
-			else:
+			elif state != self.vehicles[vehicle_id]["state"]:
+				self.debug_print("updating state for %s" % (vehicle_id))
 				self.vehicles[vehicle_id]["state"] = vehicle_data["state"]
 
 
 		# new vehicle. record time of arrival
 		elif state != CLEARED:
+			self.debug_print("new vehicle arrived and stopped: %s" % (vehicle_id))
 			self.vehicles[vehicle_id] = vehicle_data
 			self.vehicles[vehicle_id]["timestamp"] = time.time()
 
-		# TODO move to seperate function (like in MID, MIS)
-		#get the earliest arrival time
-		earliest_arrival = min([v["timestamp"] for v in self.vehicles]) 
+		if self.arrival_time is not None:
 
-		# check if there is already a car in the intersection
-		transit_vehicle = None
-		for v in self.vehicles:
-			if v["state"] == IN_TRANSIT:
-				transit_vehicle = v
-		if transit_vehicle:
-			if (transit_vehicle["direction"] in [NORTH,SOUTH] and self.direction in [NORTH, SOUTH]) \
-					or (transit_vehicle["direction"] in [EAST,WEST] and self.direction in [EAST, WEST]):
+			# TODO move to seperate function (like in MID, MIS)
+			#get the earliest arrival time
+			earliest_arrival = min([self.vehicles[v]["timestamp"] for v in self.vehicles]) 
+			#earliest_arrival = min([v["timestamp"] for v in self.vehicles]) 
 
-				self.ready =  True
+			# check if there is already a car in the intersection
+			transit_vehicle = None
+			for v in self.vehicles:
+				if self.vehicles[v]["state"] == IN_TRANSIT:
+					transit_vehicle = self.vehicles[v]
 
-		# check for arrival time precedence
-		elif (self.arrival_time + BUFFER_PERIOD) < earliest_arrival :
-			self.ready = True
+			if transit_vehicle:
+				self.debug_print("Another vehicle currently in transit.")
+				if (transit_vehicle["direction"] in [NORTH,SOUTH] and self.direction in [NORTH, SOUTH]) \
+						or (transit_vehicle["direction"] in [EAST,WEST] and self.direction in [EAST, WEST]):
+					self.debug_print("In-transit vehicle in parallel lane. ready.")
+					self.ready =  True
 
-		# check for lane precedence (NORTH/SOUTH gets to go first)
-		elif abs(self.arrival_time - earliest_arrival) < BUFFER_PERIOD:
-			if self.direction in [NORTH,SOUTH]:
+			# check for arrival time precedence
+			elif (self.arrival_time + BUFFER_PERIOD) < earliest_arrival :
+				self.debug_print("arrival time + Buffer period is less than next-earliest arrival. going.")
 				self.ready = True
+
+			# check for lane precedence (NORTH/SOUTH gets to go first)
+			elif abs(self.arrival_time - earliest_arrival) < BUFFER_PERIOD:
+				self.debug_print("ambiguous arrival times")
+				if self.direction in [NORTH,SOUTH]:
+					self.debug_print("we are in priority lane. going.")
+					self.ready = True
 
 
 
@@ -163,7 +176,7 @@ class V2VModule(Thread):
 		params = self._parse_message(str(string))
 
 		if params:
-			self.debug_print("new message received: %s" % (string))
+			#self.debug_print("new message received: %s" % (string))
 			vehicle_id = str(params[0])
 			vehicle_data = {
 					"state": int(params[1]),
@@ -229,6 +242,8 @@ class V2VModule(Thread):
 
 	# debugging
 	def debug_print(self, string):
-		if self.debug_mode:
+		global last_message
+		if self.debug_mode and string != last_message:
+			last_message = string
 			print( str(DEVICE_ID) + ": " + string)
 

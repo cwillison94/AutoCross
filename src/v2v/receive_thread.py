@@ -16,14 +16,13 @@ class ReceiveThread(Thread):
 
 	def run(self):
 		while self.running:
-			self.condition.acquire()
-			msg = self.transceiver.receive()
-			if msg and msg != self.last_message:
-				self.last_message = msg
-				self.callback and self.callback(msg)
-				#time.sleep(0.000001)
-			self.condition.notify()
-			self.condition.wait(5)
+				self.condition.acquire()
+				msg = self.transceiver.receive()
+				if msg and msg != self.last_message:
+						self.last_message = msg
+						self.callback and self.callback(msg)
+				#self.condition.notify()
+				#self.condition.wait(5)
+				self.condition.release()
+				time.sleep(0.002)
 		print('receive thread done')
-
-
