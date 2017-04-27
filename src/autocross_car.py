@@ -85,6 +85,7 @@ class AutoCrossCar:
         self.stop_sign_distance = 0
         self.stop_sign_position = []
         self.stop_img = None
+        self.last_detected_obstacle = None
 
     def _initialize_camera(self):
         if self.camera_initiliazed:
@@ -281,6 +282,7 @@ class AutoCrossCar:
                 # obstacle detection must be checked regardless of state
                 if self.check_for_obstacle():
                     logging.info("OBSTACLE DETECTED")
+                    self.last_detected_obstacle = time.time()
                     self.previous_state = self.state
                     self.state = OBSTACLE_DETECTED
                     speed_controller.stop()
@@ -297,8 +299,10 @@ class AutoCrossCar:
                 # print("stop loop: %f" % (stop_end))
                 if self.state == OBSTACLE_DETECTED:
 
-                    while self.check_for_obstacle():
-                        pass
+                    current_obstacle = self.check_for_obstacle()
+                    while current_obstacle and ((time.time() - self.last_detected_obstacle) < 200):
+                        if current_obstacle:
+                            self.last_detected_obstacle = time.time()
 
                     self.state = self.previous_state
                     logging.info("obstacle removed. returning to previous state")
