@@ -24,11 +24,15 @@ class TransmitThread(Thread):
 		self.enabled = enabled
 
 	def run(self):
-		while self.running:
-			self.condition.acquire()
-			if self.enabled:
-				self.transceiver.transmit( self.message )
-				self.callback and self.callback(self.message)
-			self.condition.notify()
-			self.condition.wait(5)
+
+	   	while self.running:
+				self.condition.acquire()
+				if self.enabled:
+						self.transceiver.transmit( self.message )
+						self.callback and self.callback(self.message)
+
+				#self.condition.notify()
+				#self.condition.wait(5)
+				self.condition.release()
+				time.sleep(0.002)
 		print('transmit thread done')
